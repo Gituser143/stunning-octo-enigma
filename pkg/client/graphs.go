@@ -10,18 +10,17 @@ import (
 
 // GetNamespacesGraph gives the graph for specified namespaces
 // TODO: Should return a variable of type graph
-func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, host string, port int, namespaces []string) error {
-	client := kc.HttpClient
+func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, namespaces []string) error {
 
 	endpoint := "/api/namespaces/graph"
 	namespaceStr := strings.Join(namespaces, ",")
-	url := fmt.Sprintf("http://%s:%d/kiali%s?namespaces=%s", host, port, endpoint, namespaceStr)
+	url := fmt.Sprintf("http://%s:%d/kiali%s?namespaces=%s", kc.host, kc.port, endpoint, namespaceStr)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := client.Do(req)
+	resp, err := kc.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -30,6 +29,7 @@ func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, host string, port
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	body := string(bodyBs)
 	fmt.Println(body)

@@ -5,15 +5,20 @@ import (
 )
 
 type KialiClient struct {
-	HttpClient *http.Client
+	httpClient *http.Client
+	host       string
+	port       int
 }
 
-func NewKialiClient(hc *http.Client) KialiClient {
-	kc := KialiClient{}
+func NewKialiClient(host string, port int, hc *http.Client) KialiClient {
+	kc := KialiClient{
+		host: host,
+		port: port,
+	}
 	if hc != nil {
-		kc.HttpClient = hc
+		kc.httpClient = hc
 	} else {
-		kc.HttpClient = http.DefaultClient
+		kc.httpClient = http.DefaultClient
 	}
 
 	return kc

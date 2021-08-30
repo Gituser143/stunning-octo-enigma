@@ -12,11 +12,11 @@ func main() {
 	ctx := context.Background()
 
 	// Init Kiali Client
-	kc := client.NewKialiClient(nil)
+	kc := client.NewKialiClient("localhost", 20001, nil)
 
 	// Get Namspace graph for a namespace
 	namespaces := []string{"istio-teastore"}
-	err := kc.GetNamespacesGraph(ctx, "localhost", 20001, namespaces)
+	err := kc.GetNamespacesGraph(ctx, namespaces)
 	if err != nil {
 		log.Fatal(err)
 	}
