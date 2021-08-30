@@ -18,6 +18,11 @@ func main() {
 	namespaces := []string{"istio-teastore"}
 	err := kc.GetNamespacesGraph(ctx, namespaces)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+	}
+
+	err = kc.GetWorkloadGraph(ctx, namespaces[0], "teastore-webui")
+	if err != nil {
+		log.Println(err)
 	}
 }
