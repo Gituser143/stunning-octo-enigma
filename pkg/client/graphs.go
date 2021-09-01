@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 
 	graph "github.com/kiali/kiali/graph/config/cytoscape"
@@ -14,11 +15,17 @@ import (
 // GetNamespacesGraph gives the graph for specified namespaces
 func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, namespaces []string) (*graph.Config, error) {
 
-	endpoint := "/api/namespaces/graph"
+	endpoint := "api/namespaces/graph"
 	namespaceStr := strings.Join(namespaces, ",")
-	url := fmt.Sprintf("http://%s:%d/kiali%s?namespaces=%s", kc.host, kc.port, endpoint, namespaceStr)
 
-	body, err := kc.sendRequest(ctx, "GET", url)
+	u := &url.URL{
+		Scheme:   "http",
+		Host:     kc.host,
+		Path:     endpoint,
+		RawQuery: fmt.Sprintf("namespaces=%s", namespaceStr),
+	}
+
+	body, err := kc.sendRequest(ctx, "GET", u.String())
 	if err != nil {
 		return nil, err
 	}
@@ -29,11 +36,17 @@ func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, namespaces []stri
 	return graphType, err
 }
 
+// GetWorkloadGraph gives the workload graph for a specified workload in a namespace
 func (kc *KialiClient) GetWorkloadGraph(ctx context.Context, namespace, workload string) (*graph.Config, error) {
-	endpoint := fmt.Sprintf("/api/namespaces/%s/workloads/%s/graph", namespace, workload)
-	url := fmt.Sprintf("http://%s:%d/kiali%s", kc.host, kc.port, endpoint)
+	endpoint := fmt.Sprintf("api/namespaces/%s/workloads/%s/graph", namespace, workload)
 
-	body, err := kc.sendRequest(ctx, "GET", url)
+	u := &url.URL{
+		Scheme: "http",
+		Host:   kc.host,
+		Path:   endpoint,
+	}
+
+	body, err := kc.sendRequest(ctx, "GET", u.String())
 	if err != nil {
 		return nil, err
 	}
