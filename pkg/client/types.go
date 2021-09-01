@@ -20,6 +20,5 @@ func NewKialiClient(host string, port int, hc *http.Client) KialiClient {
 	} else {
 		kc.httpClient = http.DefaultClient
 	}
-
 	return kc
 }

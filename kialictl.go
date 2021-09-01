@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/Gituser143/stunning-octo-enigma/pkg/client"
@@ -16,13 +17,15 @@ func main() {
 
 	// Get Namspace graph for a namespace
 	namespaces := []string{"istio-teastore"}
-	err := kc.GetNamespacesGraph(ctx, namespaces)
+	graph, err := kc.GetNamespacesGraph(ctx, namespaces)
 	if err != nil {
 		log.Println(err)
 	}
 
-	err = kc.GetWorkloadGraph(ctx, namespaces[0], "teastore-webui")
+	fmt.Println(graph)
+	graph, err = kc.GetWorkloadGraph(ctx, namespaces[0], "teastore-webui")
 	if err != nil {
 		log.Println(err)
 	}
+	fmt.Println(graph)
 }

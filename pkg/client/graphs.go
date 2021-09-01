@@ -2,15 +2,17 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
+
+	graph "github.com/kiali/kiali/graph/config/cytoscape"
 )
 
 // GetNamespacesGraph gives the graph for specified namespaces
-// TODO: Should return a variable of type graph
-func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, namespaces []string) error {
+func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, namespaces []string) (*graph.Config, error) {
 
 	endpoint := "/api/namespaces/graph"
 	namespaceStr := strings.Join(namespaces, ",")
@@ -18,47 +20,47 @@ func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, namespaces []stri
 
 	body, err := kc.sendRequest(ctx, "GET", url)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	fmt.Println(body)
+	graphType := &graph.Config{}
+	err = json.Unmarshal(body, graphType)
 
-	return nil
+	return graphType, err
 }
 
-func (kc *KialiClient) GetWorkloadGraph(ctx context.Context, namespace, workload string) error {
-
+func (kc *KialiClient) GetWorkloadGraph(ctx context.Context, namespace, workload string) (*graph.Config, error) {
 	endpoint := fmt.Sprintf("/api/namespaces/%s/workloads/%s/graph", namespace, workload)
 	url := fmt.Sprintf("http://%s:%d/kiali%s", kc.host, kc.port, endpoint)
 
 	body, err := kc.sendRequest(ctx, "GET", url)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	fmt.Println(body)
+	graphType := &graph.Config{}
+	err = json.Unmarshal(body, graphType)
 
-	return nil
+	return graphType, err
 }
 
 // sendRequest constructs a request, sends it and returns the response body as a string
-func (kc *KialiClient) sendRequest(ctx context.Context, method, url string) (string, error) {
+func (kc *KialiClient) sendRequest(ctx context.Context, method, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	resp, err := kc.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	bodyBs, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body := string(bodyBs)
 	return body, nil
 }
