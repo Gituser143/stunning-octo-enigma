@@ -15,7 +15,7 @@ import (
 // GetNamespacesGraph gives the graph for specified namespaces
 func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, namespaces []string) (*graph.Config, error) {
 
-	endpoint := "api/namespaces/graph"
+	endpoint := "kiali/api/namespaces/graph"
 	namespaceStr := strings.Join(namespaces, ",")
 
 	u := &url.URL{
@@ -38,7 +38,7 @@ func (kc *KialiClient) GetNamespacesGraph(ctx context.Context, namespaces []stri
 
 // GetWorkloadGraph gives the workload graph for a specified workload in a namespace
 func (kc *KialiClient) GetWorkloadGraph(ctx context.Context, namespace, workload string) (*graph.Config, error) {
-	endpoint := fmt.Sprintf("api/namespaces/%s/workloads/%s/graph", namespace, workload)
+	endpoint := fmt.Sprintf("kiali/api/namespaces/%s/workloads/%s/graph", namespace, workload)
 
 	u := &url.URL{
 		Scheme: "http",
