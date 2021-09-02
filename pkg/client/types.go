@@ -1,20 +1,20 @@
 package client
 
 import (
+	"fmt"
 	"net/http"
 )
 
 type KialiClient struct {
 	httpClient *http.Client
 	host       string
-	port       int
 }
 
 func NewKialiClient(host string, port int, hc *http.Client) KialiClient {
 	kc := KialiClient{
-		host: host,
-		port: port,
+		host: fmt.Sprintf("%s:%d", host, port),
 	}
+
 	if hc != nil {
 		kc.httpClient = hc
 	} else {
