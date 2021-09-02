@@ -30,4 +30,10 @@ func main() {
 	fmt.Println(graph)
 
 	client.GetMetrics(namespaces[0])
+
+	depName := "teastore-recommender"
+	depNamespace := namespaces[0]
+	err = client.Scale(depName, depNamespace)
+
+	fmt.Println(err)
 }
