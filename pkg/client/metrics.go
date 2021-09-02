@@ -31,5 +31,11 @@ func GetMetrics(namespace string) {
 		log.Fatal((err))
 	}
 
-	fmt.Println(podMetricsList)
+	// fmt.Println(podMetricsList)
+
+	for _, c := range podMetricsList.Items {
+		for _, container := range c.Containers {
+			fmt.Println("Name:", container.Name, container.Usage.Cpu())
+		}
+	}
 }
