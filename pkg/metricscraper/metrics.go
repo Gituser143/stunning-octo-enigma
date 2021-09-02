@@ -14,10 +14,18 @@ import (
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
+// LogContainerMetrics prints cpu usage of all containers in a given
+// namespace along with the value of "run" label and the container name.
+// Format: container_name,run_label,cpu_usage
 func LogContainerMetrics(ctx context.Context, namespace string, msInterval int) error {
 
+	clientset, err := initNewClientset()
+	if err != nil {
+		return err
+	}
+
 	for {
-		podMetricsList, err := getContainerMetrics(ctx, namespace)
+		podMetricsList, err := getContainerMetrics(ctx, namespace, clientset)
 		if err != nil {
 			return err
 		}
@@ -36,7 +44,7 @@ func LogContainerMetrics(ctx context.Context, namespace string, msInterval int) 
 	}
 }
 
-func getContainerMetrics(ctx context.Context, namespace string) (*v1beta1.PodMetricsList, error) {
+func initNewClientset() (*metricsv.Clientset, error) {
 	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -46,9 +54,10 @@ func getContainerMetrics(ctx context.Context, namespace string) (*v1beta1.PodMet
 		}
 	}
 	clientset, err := metricsv.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
+	return clientset, err
+}
+
+func getContainerMetrics(ctx context.Context, namespace string, clientset *metricsv.Clientset) (*v1beta1.PodMetricsList, error) {
 
 	podMetricsList, err := clientset.MetricsV1beta1().
 		PodMetricses(namespace).
