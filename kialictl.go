@@ -28,4 +28,6 @@ func main() {
 		log.Println(err)
 	}
 	fmt.Println(graph)
+
+	client.GetMetrics(namespaces[0])
 }
