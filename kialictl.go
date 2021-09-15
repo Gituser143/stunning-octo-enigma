@@ -2,42 +2,45 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 
-	ms "github.com/Gituser143/stunning-octo-enigma/pkg/metricscraper"
+	client "github.com/Gituser143/stunning-octo-enigma/pkg/kiali-client"
 )
 
 func main() {
 	// Init a context
 	ctx := context.Background()
 
-	// // Init Kiali Client
-	// kc := client.NewKialiClient("localhost", 20001, nil)
+	// Init Kiali Client
+	kc := client.NewKialiClient("localhost", 8081, nil)
 
-	// // Get Namspace graph for a namespace
+	// Get Namspace graph for a namespace
 	namespaces := []string{"istio-teastore"}
-	// graph, err := kc.GetNamespacesGraph(ctx, namespaces)
-	// if err != nil {
-	// 	log.Println(err)
-	// } else {
-	// 	fmt.Println(graph)
-	// }
+	parameters := map[string]string{
+		"duration":     "3h",
+		"responseTime": "avg",
+	}
 
-	// graph, err = kc.GetWorkloadGraph(ctx, namespaces[0], "teastore-webui")
-	// if err != nil {
-	// 	log.Println(err)
-	// } else {
-	// 	fmt.Println(graph)
-	// }
-
-	// depName := "teastore-recommender"
-	// depNamespace := namespaces[0]
-	// 	err := client.Scale(depName, depNamespace)
-
-	// 	fmt.Println(err)
-
-	err := ms.LogContainerMetrics(ctx, namespaces[0], 500)
+	// Get workload graph for a namespace
+	graph, err := kc.GetWorkloadGraph(ctx, namespaces, parameters)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+	} else {
+		bs, err := json.Marshal(graph)
+		if err != nil {
+			log.Println(err)
+		} else {
+			fmt.Println(string(bs))
+		}
+	}
+
+	// Get workload metrics for a workload and namespace
+	metrics, err := kc.GetWorkloadMetrics(ctx, namespaces[0], "teastore-webui")
+	if err != nil {
+		log.Println(err)
+	} else {
+		fmt.Println(metrics)
 	}
 }
