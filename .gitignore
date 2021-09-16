@@ -2,3 +2,8 @@ kialictl
 main
 *.csv
 images
+*.png
+*.ipynb
+*.zip
+.ipynb_checkpoints
+*.json
