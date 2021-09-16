@@ -7,8 +7,9 @@ import (
 	graph "github.com/kiali/kiali/graph/config/cytoscape"
 )
 
-func MakeGraph(graphType *graph.Config) (map[string]*Item, error) {
-	adjList := make(map[string]*Item)
+// MakeGraph returns a Graph variable from a given graphType
+func MakeGraph(graphType *graph.Config) (Graph, error) {
+	adjList := make(Graph)
 	for _, node := range graphType.Elements.Nodes {
 		item := newItem(node.Data)
 		adjList[node.Data.ID] = &item
@@ -24,9 +25,9 @@ func MakeGraph(graphType *graph.Config) (map[string]*Item, error) {
 
 	jsonAdjList, err := json.Marshal(adjList)
 	if err == nil {
-		fmt.Printf(string(jsonAdjList))
+		fmt.Println(string(jsonAdjList))
 	} else {
-		fmt.Printf(err.Error())
+		fmt.Println(err.Error())
 	}
 	return adjList, err
 }

@@ -38,9 +38,11 @@ func (kc *KialiClient) GetWorkloadGraph(ctx context.Context, namespaces []string
 
 	graphType := &graph.Config{}
 	err = json.Unmarshal(body, graphType)
+	if err != nil {
+		return nil, err
+	}
 
-	graphList, err := MakeGraph(graphType)
-	return graphList, err
+	return MakeGraph(graphType)
 }
 
 // sendRequest constructs a request, sends it and returns the response body as a string

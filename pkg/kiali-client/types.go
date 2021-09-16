@@ -13,6 +13,9 @@ type KialiClient struct {
 	host       string
 }
 
+// Graph is a type that holds nodes and its edges indexed by node ID
+type Graph map[string]*Item
+
 // Item is a graph element
 type Item struct {
 	Node  *graph.NodeData   `json:"node"`
@@ -20,11 +23,7 @@ type Item struct {
 }
 
 func newItem(node *graph.NodeData) Item {
-	item := Item{}
-
-	item.Node = node
-
-	return item
+	return Item{Node: node}
 }
 
 // NewKialiClient is a constructor for type KialiClient
