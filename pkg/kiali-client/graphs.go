@@ -42,7 +42,8 @@ func (kc *KialiClient) GetWorkloadGraph(ctx context.Context, namespaces []string
 		return nil, err
 	}
 
-	return MakeGraph(graphType)
+	graph := MakeGraph(graphType)
+	return graph, nil
 }
 
 // sendRequest constructs a request, sends it and returns the response body as a string

@@ -22,12 +22,8 @@ type Item struct {
 	Edges []*graph.EdgeData `json:"edges"`
 }
 
-func newItem(node *graph.NodeData) Item {
-	return Item{Node: node}
-}
-
 // NewKialiClient is a constructor for type KialiClient
-func NewKialiClient(host string, port int, hc *http.Client) KialiClient {
+func NewKialiClient(host string, port int, hc *http.Client) *KialiClient {
 	kc := KialiClient{
 		host: fmt.Sprintf("%s:%d", host, port),
 	}
@@ -37,5 +33,5 @@ func NewKialiClient(host string, port int, hc *http.Client) KialiClient {
 	} else {
 		kc.httpClient = http.DefaultClient
 	}
-	return kc
+	return &kc
 }
