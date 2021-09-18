@@ -7,7 +7,7 @@ import (
 	"github.com/Gituser143/stunning-octo-enigma/pkg/k8s"
 	client "github.com/Gituser143/stunning-octo-enigma/pkg/kiali-client"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/metricscraper"
-	trigger "github.com/Gituser143/stunning-octo-enigma/pkg/trigger"
+	"github.com/Gituser143/stunning-octo-enigma/pkg/trigger"
 )
 
 func main() {
