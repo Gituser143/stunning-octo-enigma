@@ -67,3 +67,28 @@ func main() {
 	time.Sleep(30 * time.Second)
 	exit <- 0
 }
+
+/*
+// Example usage of MetricClient
+
+func exampleUsageMetricClient() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	client, err := ms.NewMetricClient()
+	if err != nil {
+		return err
+	}
+
+	podMetrics := client.StreamPodMetrics(ctx, "default", "teastore-auth-7947675f98-knvq5", 1*time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case metric := <-podMetrics:
+			fmt.Println(metric.Containers[0].Usage.Cpu())
+		}
+	}
+}
+*/
