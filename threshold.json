@@ -1,0 +1,13 @@
+{
+    "throughput": 4000,
+    "thresholds": {
+        "teastore-webui": {
+            "cpu": 70.0,
+            "memory": 70.0
+        },
+        "teastore-persistance": {
+            "cpu": 70.0,
+            "memory": 70.0
+        }
+    }
+}
