@@ -2,12 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/Gituser143/stunning-octo-enigma/pkg/k8s"
 	client "github.com/Gituser143/stunning-octo-enigma/pkg/kiali-client"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/metricscraper"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/trigger"
+
+	flag "github.com/spf13/pflag"
 )
 
 func main() {
@@ -40,10 +48,56 @@ func main() {
 		K8sClient:    k8sc,
 	}
 
-	// TODO: Fetch thresholds
+	// Fetch thresholds
+
+	var threshold trigger.Threshold
+
+	filePath := flag.String("file", ".", "Path to config file or directory")
+	flag.Parse()
+
+	fileInfo, err := os.Stat(*filePath)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if fileInfo.IsDir() {
+		err = filepath.Walk(*filePath,
+			func(path string, info fs.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() {
+					bs, err := ioutil.ReadFile(path)
+					if err != nil {
+						fmt.Println("2")
+						return err
+					}
+					err = json.Unmarshal(bs, &threshold)
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		bs, err := ioutil.ReadFile(*filePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = json.Unmarshal(bs, &threshold)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	fmt.Println(threshold)
 
 	// Run Trigger
-	err = tc.StartTrigger(ctx, trigger.Threshold{})
+	err = tc.StartTrigger(ctx, threshold)
 	if err != nil {
 		log.Fatal(err)
 	}
