@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 )
 
@@ -29,7 +28,6 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context, thresholds Threshold)
 			})
 
 			eg.Go(func() error {
-				// TODO: get thresholds from above
 				return tc.checkResource(egCtx, thresholds.ResourceThresholds)
 			})
 
@@ -89,7 +87,7 @@ func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) 
 }
 
 func (tc *TriggerClient) checkResource(ctx context.Context, thresholds map[string]Resources) error {
-	pods, err := tc.GetPods(ctx, applicationNamespace)
+	pods, err := tc.GetPodNames(ctx, applicationNamespace)
 	if err != nil {
 		return err
 	}
@@ -132,12 +130,12 @@ func (tc *TriggerClient) getPerDeploymentMetrics(ctx context.Context, depPodMap 
 }
 
 // this is a super hacky way of doing this, but we shall make our peace with it for now.
-func getPodsForDeployment(deploymentName string, pods []apiv1.Pod) []string {
+func getPodsForDeployment(deploymentName string, pods []string) []string {
 	resPods := []string{}
 
 	for _, pod := range pods {
-		if strings.HasPrefix(pod.Name, deploymentName+"-") {
-			resPods = append(resPods, pod.Name)
+		if strings.HasPrefix(pod, deploymentName+"-") {
+			resPods = append(resPods, pod)
 		}
 	}
 
