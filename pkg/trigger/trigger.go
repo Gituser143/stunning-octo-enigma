@@ -131,8 +131,13 @@ func (tc *TriggerClient) getBaseDeployments(ctx context.Context) ([]string, erro
 	// scaled.
 	for dep, threshold := range tc.thresholds.ResourceThresholds {
 		metrics := depMetrics[dep]
-		if metrics.CPU > threshold.CPU || metrics.Memory > threshold.Memory {
+		if metrics.CPU > threshold.CPU && threshold.CPU > 0 {
 			baseDeps = append(baseDeps, dep)
+			continue
+		}
+		if metrics.Memory > threshold.Memory && threshold.Memory > 0 {
+			baseDeps = append(baseDeps, dep)
+			continue
 		}
 	}
 
