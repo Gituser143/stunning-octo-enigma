@@ -24,7 +24,7 @@ func main() {
 
 	// Variables for Kiali Client
 	host := "localhost"
-	port := 8081
+	port := 20001
 
 	// Init Kiali Client
 	kc := client.NewKialiClient(host, port, nil)

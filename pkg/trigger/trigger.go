@@ -19,7 +19,6 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 	thresholds := tc.thresholds
 
 	for {
-		baseDeps := []string{}
 
 		select {
 		case <-ctx.Done():
@@ -34,17 +33,20 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 			// Check for resource thresholds exceeding and get corresponding
 			// deployments
 			eg.Go(func() error {
-				var err error
-				baseDeps, err = tc.getBaseDeployments(egCtx)
-				return err
+				return tc.checkResources(egCtx)
 			})
 
 			if err := eg.Wait(); err != nil {
 				if errors.Is(err, errScaleApplication) {
 					// Scale App
-					log.Println(baseDeps)
+					baseDeps, err := tc.getBaseDeployments(ctx)
+					if err != nil && !errors.Is(err, errScaleApplication) {
+						return err
+					}
+					log.Println("Deployments to scale are:", baseDeps)
+				} else {
+					return err
 				}
-				return err
 			}
 		}
 	}
@@ -92,6 +94,11 @@ func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) 
 	}
 
 	return nil
+}
+
+func (tc *TriggerClient) checkResources(ctx context.Context) error {
+	_, err := tc.getBaseDeployments(ctx)
+	return err
 }
 
 // getBaseDeployments returns a slice of deployment names that have resource
