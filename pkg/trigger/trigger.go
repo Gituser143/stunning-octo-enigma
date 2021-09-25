@@ -13,28 +13,36 @@ import (
 )
 
 // StartTrigger runs the trigger indefinetely and checks for violations every 30 seconds
-func (tc *TriggerClient) StartTrigger(ctx context.Context, thresholds Threshold) error {
+func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 	t := time.NewTicker(30 * time.Second)
+	thresholds := tc.thresholds
 
 	for {
+		baseDeps := []string{}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 
 		case <-t.C:
+			// Check for throughput violations
 			eg.Go(func() error {
 				return tc.checkThroughput(egCtx, thresholds.Throughput)
 			})
 
+			// Check for resource thresholds exceeding and get corresponding
+			// deployments
 			eg.Go(func() error {
-				return tc.checkResource(egCtx, thresholds.ResourceThresholds)
+				var err error
+				baseDeps, err = tc.getBaseDeployments(egCtx)
+				return err
 			})
 
 			if err := eg.Wait(); err != nil {
 				if errors.Is(err, errScaleApplication) {
 					// Scale App
-					log.Println("Scaling Application")
+					log.Println(baseDeps)
 				}
 				return err
 			}
@@ -86,15 +94,19 @@ func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) 
 	return nil
 }
 
-func (tc *TriggerClient) checkResource(ctx context.Context, thresholds map[string]Resources) error {
+// getBaseDeployments returns a slice of deployment names that have resource
+// utilization higher than specified threshold
+func (tc *TriggerClient) getBaseDeployments(ctx context.Context) ([]string, error) {
+	baseDeps := []string{}
+
 	pods, err := tc.GetPodNames(ctx, applicationNamespace)
 	if err != nil {
-		return err
+		return baseDeps, err
 	}
 
 	deps, err := tc.GetDeploymentNames(ctx, applicationNamespace)
 	if err != nil {
-		return err
+		return baseDeps, err
 	}
 
 	// create a mapping of deployments -> pods belonging to that
@@ -104,12 +116,24 @@ func (tc *TriggerClient) checkResource(ctx context.Context, thresholds map[strin
 		depsToPods[dep] = getPodsForDeployment(dep, pods)
 	}
 
-	metricsPerDeployment := tc.getPerDeploymentMetrics(ctx, depsToPods)
-	if decideIfResourceTriggerShouldHappen(metricsPerDeployment, thresholds) {
-		return errScaleApplication
+	// get current deployment metrics
+	depMetrics := tc.getPerDeploymentMetrics(ctx, depsToPods)
+
+	// Check if deployments with thresholds defined have metrics greater than
+	// threshold. If yes, that deployment is a base deployment which needs to be
+	// scaled.
+	for dep, threshold := range tc.thresholds.ResourceThresholds {
+		metrics := depMetrics[dep]
+		if metrics.CPU > threshold.CPU || metrics.Memory > threshold.Memory {
+			baseDeps = append(baseDeps, dep)
+		}
 	}
 
-	return nil
+	if len(baseDeps) > 0 {
+		return baseDeps, errScaleApplication
+	}
+
+	return baseDeps, nil
 }
 
 func (tc *TriggerClient) getPerDeploymentMetrics(ctx context.Context, depPodMap map[string][]string) map[string]Resources {
@@ -156,17 +180,4 @@ func aggregatePodMetricsToResources(metrics *v1beta1.PodMetrics) Resources {
 	r.Memory = memSum / float64(numContainers)
 
 	return r
-}
-
-// TODO: we need to discuss the reactive trigger and then implement this - for now, it'll decide to trigger
-// even if one deployment's CPU usage crosses threshold.
-func decideIfResourceTriggerShouldHappen(metricsPerDeployment map[string]Resources, thresholds map[string]Resources) bool {
-	for dep, metrics := range metricsPerDeployment {
-		thresh := thresholds[dep]
-		if thresh.CPU <= metrics.CPU {
-			return true
-		}
-	}
-
-	return false
 }

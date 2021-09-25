@@ -12,7 +12,7 @@ type Resources struct {
 	Memory float64 `json:"memory"`
 }
 
-type Threshold struct {
+type Thresholds struct {
 	ResourceThresholds map[string]Resources `json:"thresholds"`
 	Throughput         int64                `json:"throughput"`
 }

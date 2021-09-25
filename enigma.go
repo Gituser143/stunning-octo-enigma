@@ -41,16 +41,8 @@ func main() {
 		log.Fatal("failied to init k8s client")
 	}
 
-	// Init Trigger Client
-	tc := trigger.TriggerClient{
-		KialiClient:  kc,
-		MetricClient: mc,
-		K8sClient:    k8sc,
-	}
-
 	// Fetch thresholds
-
-	var threshold trigger.Threshold
+	var thresholds trigger.Thresholds
 
 	filePath := flag.String("file", ".", "Path to config file or directory")
 	flag.Parse()
@@ -73,7 +65,7 @@ func main() {
 						fmt.Println("2")
 						return err
 					}
-					err = json.Unmarshal(bs, &threshold)
+					err = json.Unmarshal(bs, &thresholds)
 					if err != nil {
 						return err
 					}
@@ -88,16 +80,23 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = json.Unmarshal(bs, &threshold)
+		err = json.Unmarshal(bs, &thresholds)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	fmt.Println(threshold)
+	// Init Trigger Client
+	tc := trigger.TriggerClient{
+		KialiClient:  kc,
+		MetricClient: mc,
+		K8sClient:    k8sc,
+	}
+
+	tc.SetThresholds(thresholds)
 
 	// Run Trigger
-	err = tc.StartTrigger(ctx, threshold)
+	err = tc.StartTrigger(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
