@@ -2,6 +2,7 @@ package trigger
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"strconv"
@@ -38,6 +39,8 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 
 			if err := eg.Wait(); err != nil {
 				if errors.Is(err, errScaleApplication) {
+					log.Println("trigger client triggered")
+					log.Println("fetching base deployments to scale")
 					// Scale App
 					baseDeps, err := tc.getBaseDeployments(ctx)
 					if err != nil && !errors.Is(err, errScaleApplication) {
@@ -45,6 +48,7 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 					}
 					log.Println("Deployments to scale are:", baseDeps)
 				} else {
+					log.Println("no resource thresholds crossed, not scaling")
 					return err
 				}
 			}
@@ -125,6 +129,12 @@ func (tc *TriggerClient) getBaseDeployments(ctx context.Context) ([]string, erro
 
 	// get current deployment metrics
 	depMetrics := tc.getPerDeploymentMetrics(ctx, depsToPods)
+
+	metricsBs, _ := json.MarshalIndent(depMetrics, "", "  ")
+	thresholdBs, _ := json.MarshalIndent(tc.thresholds.ResourceThresholds, "", "  ")
+
+	log.Println("Metrics are\n", string(metricsBs))
+	log.Println("Thresholds are\n", string(thresholdBs))
 
 	// Check if deployments with thresholds defined have metrics greater than
 	// threshold. If yes, that deployment is a base deployment which needs to be
