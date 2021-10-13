@@ -112,7 +112,7 @@ func (tc *TriggerClient) checkResources(ctx context.Context) error {
 }
 
 // getBaseDeployments returns a slice of deployment names that have resource
-// utilization higher than specified threshold
+// utilization higher than specified threshold along with their respoective metrics
 func (tc *TriggerClient) getBaseDeployments(ctx context.Context) (map[string]Resources, error) {
 	baseDeps := make(map[string]Resources)
 
