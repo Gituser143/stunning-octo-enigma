@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/Gituser143/stunning-octo-enigma/pkg/k8s"
@@ -59,6 +60,8 @@ func main() {
 	flag.Parse()
 
 	if *loadtest {
+		var wg sync.WaitGroup
+		wg.Add(1)
 		// TODO: Get load test parameters from configs
 		scheme := "http"
 		host := "localhost"
@@ -86,14 +89,14 @@ func main() {
 		exitChan := make(chan int)
 
 		// Write queue lengths to file
-		go logQueuelengths(ctx, &tc, namespaces, parameters, exitChan)
+		go logQueuelengths(ctx, &tc, namespaces, parameters, exitChan, &wg)
 
 		// Begin stress test
 		sc.StressApplication(distributionType, steps, duration, workers, minRate, maxRate)
 
 		time.Sleep(30 * time.Second)
 		exitChan <- 1
-
+		wg.Wait()
 	} else {
 		if *filePath == "" {
 			flag.Usage()
@@ -162,11 +165,13 @@ func logQueuelengths(
 	namespaces []string,
 	parameters map[string]string,
 	exitChan chan int,
+	wg *sync.WaitGroup,
 ) {
 	maxQueueLengths := make(map[string]float64)
 
 	// Dump Queue Lengths to a file
 	defer func() {
+		defer wg.Done()
 		bs, err := json.MarshalIndent(maxQueueLengths, "", "\t")
 		if err != nil {
 			log.Fatal(err)
