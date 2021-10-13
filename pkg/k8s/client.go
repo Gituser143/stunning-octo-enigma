@@ -139,3 +139,18 @@ func (c *K8sClient) ScaleDeployment(ctx context.Context, namespace, name string,
 
 	return nil
 }
+
+// Gets current Replica Count of given deployment in a namespace
+func (c *K8sClient) GetCurrentReplicaCount(ctx context.Context, namespace, name string) (int32, error) {
+	s, err := c.client.AppsV1().
+		Deployments(namespace).
+		GetScale(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return 0, err
+	}
+
+	sc := s.DeepCopy()
+	replicaCount := sc.Spec.Replicas
+
+	return replicaCount, err
+}

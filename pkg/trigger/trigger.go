@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,11 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 			if err := eg.Wait(); err != nil {
 				if errors.Is(err, errScaleApplication) {
 					// Scale App
+					// Call scale function
+					// 	Scale function should calculate replica count of service
+					// 	at which trigger occured
+					// 	Scale function should then calculate effect of scaling to
+					// 	donwstream services
 					baseDeps, err := tc.getBaseDeployments(ctx)
 					if err != nil && !errors.Is(err, errScaleApplication) {
 						return err
@@ -103,8 +109,8 @@ func (tc *TriggerClient) checkResources(ctx context.Context) error {
 
 // getBaseDeployments returns a slice of deployment names that have resource
 // utilization higher than specified threshold
-func (tc *TriggerClient) getBaseDeployments(ctx context.Context) ([]string, error) {
-	baseDeps := []string{}
+func (tc *TriggerClient) getBaseDeployments(ctx context.Context) (map[string]Resources, error) {
+	baseDeps := make(map[string]Resources)
 
 	pods, err := tc.GetPodNames(ctx, applicationNamespace)
 	if err != nil {
@@ -132,11 +138,11 @@ func (tc *TriggerClient) getBaseDeployments(ctx context.Context) ([]string, erro
 	for dep, threshold := range tc.thresholds.ResourceThresholds {
 		metrics := depMetrics[dep]
 		if metrics.CPU > threshold.CPU && threshold.CPU > 0 {
-			baseDeps = append(baseDeps, dep)
+			baseDeps[dep] = metrics
 			continue
 		}
 		if metrics.Memory > threshold.Memory && threshold.Memory > 0 {
-			baseDeps = append(baseDeps, dep)
+			baseDeps[dep] = metrics
 			continue
 		}
 	}
@@ -192,4 +198,38 @@ func aggregatePodMetricsToResources(metrics *v1beta1.PodMetrics) Resources {
 	r.Memory = memSum / float64(numContainers)
 
 	return r
+}
+
+// getNewReplicaCounts gets replica counts for problematic deployments,
+// i. e., deployments where resource thresholds are exceeded.
+// This function returns a map of deployments to their new (HPA) replica counts
+func (tc *TriggerClient) getNewReplicaCounts(ctx context.Context, baseDeps map[string]Resources, namespace string) (map[string]int64, error) {
+
+	// desiredReplicas := ceil[currentReplicas * ( currentMetricValue / desiredMetricValue )]
+
+	baseDepsNewReplicaCounts := make(map[string]int64)
+
+	for dep, currentMetrics := range baseDeps {
+		currentReplicas, err := tc.K8sClient.GetCurrentReplicaCount(ctx, namespace, dep)
+		if err != nil {
+			return baseDepsNewReplicaCounts, err
+		}
+
+		desiredMetrics := tc.thresholds.ResourceThresholds[dep]
+
+		desiredReplicasCPU := int64(math.Ceil(float64((currentReplicas * (int32(currentMetrics.CPU) / int32(desiredMetrics.CPU))))))
+		desiredReplicasMemory := int64(math.Ceil(float64(currentReplicas * (int32(currentMetrics.Memory) / int32(currentMetrics.Memory)))))
+
+		desiredReplicas := int64(0)
+
+		if desiredReplicasCPU > desiredReplicasMemory {
+			desiredReplicas = desiredReplicasCPU
+		} else {
+			desiredReplicas = desiredReplicasMemory
+		}
+
+		baseDepsNewReplicaCounts[dep] = desiredReplicas
+	}
+
+	return baseDepsNewReplicaCounts, nil
 }
