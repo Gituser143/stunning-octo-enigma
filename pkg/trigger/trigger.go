@@ -108,23 +108,22 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 	queueLengths, _ := kialiGraph.GetQueueLengths()
 
 	// Initializes the replica count to the current replica count for each service
-	for service, item := range kialiGraph {
+	for _, item := range kialiGraph {
 		if item.Node.Workload == "unknown" {
 			continue
 		} else {
-			currentReplicaCount, err := tc.K8sClient.GetCurrentReplicaCount(ctx, applicationNamespace, service)
+			currentReplicaCount, err := tc.K8sClient.GetCurrentReplicaCount(ctx, applicationNamespace, item.Node.Workload)
 
 			if err != nil {
 				return err
 			}
 
-			replicaCounts[service] = (int)(currentReplicaCount)
-			oldReplicaCounts[service] = (int)(currentReplicaCount)
+			replicaCounts[item.Node.Workload] = (int)(currentReplicaCount)
+			oldReplicaCounts[item.Node.Workload] = (int)(currentReplicaCount)
 		}
 	}
 
 	baseDependenciesNewReplicaCount, err := tc.getNewReplicaCounts(ctx, baseDeps, applicationNamespace)
-
 	if err != nil {
 		return err
 	}
@@ -140,6 +139,11 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 
 	queueLengthThresholds := tc.getQueueLengthThresholds("queue.json")
 
+	idMap := make(map[string]string)
+	for id, item := range kialiGraph {
+		idMap[item.Node.Workload] = id
+	}
+
 	for {
 		if graphQueue.Len() == 0 {
 			break
@@ -147,13 +151,13 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 
 		currentNode := graphQueue.Front()
 		// curentService here refers to the parent service
-		currentService := fmt.Sprintf("%v", currentNode.Value)
+		currentService := idMap[fmt.Sprintf("%v", currentNode.Value)]
 		graphQueue.Remove(currentNode)
 
+		newQueueLength := queueLengths[currentService] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
 		for _, edge := range kialiGraph[currentService].Edges {
 			// serviceToScale refers to the child service
-			serviceToScale := edge.Target
-			newQueueLength := queueLengths[currentService] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
+			serviceToScale := kialiGraph[edge.Target].Node.Workload
 			newReplicaCount := (int)(math.Ceil(newQueueLength / queueLengthThresholds[serviceToScale]))
 
 			if newReplicaCount > replicaCounts[serviceToScale] {
@@ -337,8 +341,8 @@ func (tc *TriggerClient) getNewReplicaCounts(ctx context.Context, baseDeps map[s
 
 		desiredMetrics := tc.thresholds.ResourceThresholds[dep]
 
-		desiredReplicasCPU := int64(math.Ceil(float64((currentReplicas * (int32(currentMetrics.CPU) / int32(desiredMetrics.CPU))))))
-		desiredReplicasMemory := int64(math.Ceil(float64(currentReplicas * (int32(currentMetrics.Memory) / int32(currentMetrics.Memory)))))
+		desiredReplicasCPU := int64(math.Ceil(float64(currentReplicas) * currentMetrics.CPU / desiredMetrics.CPU))
+		desiredReplicasMemory := int64(math.Ceil(float64(currentReplicas) * currentMetrics.Memory / currentMetrics.Memory))
 
 		desiredReplicas := int64(0)
 

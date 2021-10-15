@@ -150,6 +150,7 @@ func (c *K8sClient) GetCurrentReplicaCount(ctx context.Context, namespace, name 
 	}
 
 	sc := s.DeepCopy()
+	// TODO: Get current state and not desired state replica counts
 	replicaCount := sc.Spec.Replicas
 
 	return replicaCount, err

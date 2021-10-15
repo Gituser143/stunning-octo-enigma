@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -73,36 +74,34 @@ func (kc *KialiClient) sendRequest(ctx context.Context, method, url string) ([]b
 // for the 'unknown' node
 func (g Graph) GetQueueLengths() (map[string]float64, float64) {
 	queueLengths := make(map[string]float64)
-	unkownQueueLength := 0.0
 
 	// Iterate over items in graph. (Each item is a node along with it's edges)
 	for _, item := range g {
-		queueLength := 0.0
 
 		// Iterate over an item's edges
 		for _, edge := range item.Edges {
+			depName := g[edge.Target].Node.Workload
 			throughput, err := strconv.ParseFloat(edge.Throughput, 64)
 			if err != nil {
 				throughput = 0
+				log.Println("throughput", err, item.Node.Workload, depName)
 			}
 
 			responseTime, err := strconv.ParseFloat(edge.ResponseTime, 64)
 			if err != nil {
 				responseTime = 0
+				log.Println("response time", err, item.Node.Workload, depName)
 			}
 
 			// Sum up item's queue lengths as throughput * response time
-			queueLength += throughput * responseTime
-		}
-
-		// Calculate item's queue length
-
-		if item.Node.Workload == "unknown" {
-			unkownQueueLength += queueLength
-		} else {
-			queueLengths[item.Node.Workload] = queueLength
+			queueLength := throughput * responseTime
+			queueLengths[depName] += queueLength
 		}
 	}
 
-	return queueLengths, unkownQueueLength
+	// // Get unknownQueueLengths
+	// unknownQueueLength := queueLengths["unknown"]
+	// delete(queueLengths, "unknown")
+
+	return queueLengths, 0
 }

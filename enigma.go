@@ -64,11 +64,11 @@ func main() {
 		wg.Add(1)
 		// TODO: Get load test parameters from configs
 		scheme := "http"
-		host := "localhost"
+		host := "192.168.99.103"
 		port := 30080
 
 		distributionType := "inc"
-		steps := 100
+		steps := 20
 		duration := 1
 		workers := 5
 		minRate := 10
@@ -202,7 +202,7 @@ func logQueuelengths(
 					if maxQ, ok := maxQueueLengths[dep]; !ok {
 						maxQueueLengths[dep] = q
 					} else {
-						if maxQ > q {
+						if q > maxQ {
 							maxQueueLengths[dep] = q
 						}
 					}
@@ -216,7 +216,6 @@ func logQueuelengths(
 			return
 		}
 	}
-
 }
 
 /*
