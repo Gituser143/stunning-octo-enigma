@@ -1,11 +1,15 @@
 package trigger
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -50,9 +54,9 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 					// 	donwstream services
 					baseDeps, err := tc.getBaseDeployments(ctx)
 					if err != nil && !errors.Is(err, errScaleApplication) {
-						return err
+						log.Println("Deployments to scale are:", baseDeps)
+						tc.scaleDeployements(ctx, baseDeps)
 					}
-					log.Println("Deployments to scale are:", baseDeps)
 				} else {
 					log.Println("no resource thresholds crossed, not scaling")
 					return err
@@ -60,6 +64,112 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (tc *TriggerClient) getQueueLengthThresholds(fileName string) map[string]float64 {
+
+	queueLengthThresholds := make(map[string]float64)
+
+	jsonFile, err := os.Open(fileName)
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	defer jsonFile.Close()
+
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+	json.Unmarshal([]byte(byteValue), &queueLengthThresholds)
+
+	return queueLengthThresholds
+}
+
+func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[string]Resources) error {
+
+	// Initialize an empty list used as a queue for BFS
+	graphQueue := list.New()
+
+	// Maintains the replica counts of each service
+	oldReplicaCounts := make(map[string]int)
+	replicaCounts := make(map[string]int)
+
+	namespaces := []string{applicationNamespace}
+	parameters := map[string]string{
+		"responseTime": "avg",
+		"throughput":   "response",
+		"duration":     "1m",
+	}
+
+	kialiGraph, err := tc.GetWorkloadGraph(ctx, namespaces, parameters)
+	if err != nil {
+		return err
+	}
+
+	queueLengths, _ := kialiGraph.GetQueueLengths()
+
+	// Initializes the replica count to the current replica count for each service
+	for service, item := range kialiGraph {
+		if item.Node.Workload == "unknown" {
+			continue
+		} else {
+			currentReplicaCount, err := tc.K8sClient.GetCurrentReplicaCount(ctx, applicationNamespace, service)
+
+			if err != nil {
+				return err
+			}
+
+			replicaCounts[service] = (int)(currentReplicaCount)
+			oldReplicaCounts[service] = (int)(currentReplicaCount)
+		}
+	}
+
+	baseDependenciesNewReplicaCount, err := tc.getNewReplicaCounts(ctx, baseDeps, applicationNamespace)
+
+	if err != nil {
+		return err
+	}
+
+	// Iterates through base dependencies
+	// Calculates new replica count for them ( based on HPA )
+	// Pushes the base dependencies into the graphQueue
+	// to perform BFS on it's child nodes
+	for service, replicaCount := range baseDependenciesNewReplicaCount {
+		replicaCounts[service] = (int)(math.Max(float64(replicaCounts[service]), float64(replicaCount)))
+		graphQueue.PushBack(service)
+	}
+
+	queueLengthThresholds := tc.getQueueLengthThresholds("queue.json")
+
+	for {
+		if graphQueue.Len() == 0 {
+			break
+		}
+
+		currentNode := graphQueue.Front()
+		// curentService here refers to the parent service
+		currentService := fmt.Sprintf("%v", currentNode.Value)
+		graphQueue.Remove(currentNode)
+
+		for _, edge := range kialiGraph[currentService].Edges {
+			// serviceToScale refers to the child service
+			serviceToScale := edge.Target
+			newQueueLength := queueLengths[currentService] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
+			newReplicaCount := (int)(math.Ceil(newQueueLength / queueLengthThresholds[serviceToScale]))
+
+			if newReplicaCount > replicaCounts[serviceToScale] {
+				replicaCounts[serviceToScale] = newReplicaCount
+				graphQueue.PushBack(serviceToScale)
+			}
+		}
+	}
+
+	for service, replicaCount := range replicaCounts {
+		if replicaCount > oldReplicaCounts[service] {
+			tc.K8sClient.ScaleDeployment(ctx, applicationNamespace, service, int32(replicaCount))
+		}
+	}
+
+	return nil
 }
 
 func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) error {
