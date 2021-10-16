@@ -133,6 +133,12 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 	// Pushes the base dependencies into the graphQueue
 	// to perform BFS on it's child nodes
 	for service, replicaCount := range baseDependenciesNewReplicaCount {
+		log.Printf(
+			"[hpa rc for %s] old replica count: %d, new replica count: %d\n",
+			service,
+			replicaCounts[service],
+			replicaCount,
+		)
 		replicaCounts[service] = (int)(math.Max(float64(replicaCounts[service]), float64(replicaCount)))
 		graphQueue.PushBack(service)
 	}
@@ -155,12 +161,27 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 		graphQueue.Remove(currentNode)
 
 		for _, edge := range kialiGraph[currentService].Edges {
+			if edge == nil {
+				continue
+			}
 			// serviceToScale refers to the child service
 			serviceToScale := kialiGraph[edge.Target].Node.Workload
 			newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
 			newReplicaCount := (int)(math.Ceil(newQueueLength/queueLengthThresholds[serviceToScale])) * replicaCounts[serviceToScale]
 
 			if newReplicaCount > replicaCounts[serviceToScale] {
+				log.Printf(
+					"[service: %s] old ql: %f, new ql: %f\n",
+					serviceToScale,
+					queueLengths[serviceToScale],
+					newQueueLength,
+				)
+				log.Printf(
+					"[replicas for: %s] old replica count: %d, new replica count: %d\n\n",
+					serviceToScale,
+					replicaCounts[serviceToScale],
+					newReplicaCount,
+				)
 				replicaCounts[serviceToScale] = newReplicaCount
 				graphQueue.PushBack(serviceToScale)
 			}

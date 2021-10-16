@@ -12,6 +12,8 @@ import (
 	"k8s.io/client-go/util/homedir"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
+
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 // MetricClient is a wrapper around a clientset.

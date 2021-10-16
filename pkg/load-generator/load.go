@@ -1,7 +1,6 @@
 package load
 
 import (
-	"log"
 	"math/rand"
 	"time"
 
@@ -61,15 +60,15 @@ func (sc *StressClient) StressApplication(
 		targeter := vegeta.NewStaticTargeter(targets...)
 		res := attacker.Attack(targeter, rate, time.Duration(duration)*time.Second, "")
 		open := true
-		var result *vegeta.Result
+		// var result *vegeta.Result
 
 		for open {
-			result, open = <-res
-			if result != nil {
-				log.Println("response received", result.Code)
-			} else {
-				log.Println("nil result")
-			}
+			_, open = <-res
+			// if result != nil {
+			// 	log.Println("response received", result.Code)
+			// } else {
+			// 	log.Println("nil result")
+			// }
 		}
 	}
 }

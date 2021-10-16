@@ -19,6 +19,7 @@ import (
 	"github.com/Gituser143/stunning-octo-enigma/pkg/trigger"
 
 	flag "github.com/spf13/pflag"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 func main() {
@@ -35,7 +36,7 @@ func main() {
 	// Init Metrics Client
 	mc, err := metricscraper.NewMetricClient()
 	if err != nil {
-		log.Fatal("failied to init metrics client")
+		log.Fatal("failied to init metrics client: ", err)
 	}
 
 	// Init K8s Client
@@ -131,17 +132,22 @@ func main() {
 func loadTest(ctx context.Context, tc *trigger.TriggerClient, shouldLogQueueLens bool) {
 	var wg sync.WaitGroup
 	wg.Add(1)
+	defer wg.Wait()
+
 	// TODO: Get load test parameters from configs
 	scheme := "http"
-	host := "localhost"
-	port := 30080
+	host := os.Getenv("TEASTORE_HOST")
+	if host == "" {
+		log.Fatal("TEASTORE_HOST env not set")
+	}
+	port := 8080
 
 	distributionType := "inc"
 	steps := 50
-	duration := 1
+	duration := 10
 	workers := 50
 	minRate := 50
-	maxRate := 500
+	maxRate := 200
 
 	namespaces := []string{"istio-teastore"}
 
@@ -165,9 +171,8 @@ func loadTest(ctx context.Context, tc *trigger.TriggerClient, shouldLogQueueLens
 	// Begin stress test
 	sc.StressApplication(distributionType, steps, duration, workers, minRate, maxRate)
 
-	time.Sleep(30 * time.Second)
+	time.Sleep(10 * time.Second)
 	exitChan <- 1
-	wg.Wait()
 }
 
 func logQueuelengths(
