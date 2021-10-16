@@ -144,14 +144,10 @@ func (c *K8sClient) ScaleDeployment(ctx context.Context, namespace, name string,
 func (c *K8sClient) GetCurrentReplicaCount(ctx context.Context, namespace, name string) (int32, error) {
 	s, err := c.client.AppsV1().
 		Deployments(namespace).
-		GetScale(ctx, name, metav1.GetOptions{})
+		Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return 0, err
 	}
 
-	sc := s.DeepCopy()
-	// TODO: Get current state and not desired state replica counts
-	replicaCount := sc.Spec.Replicas
-
-	return replicaCount, err
+	return s.Status.Replicas, err
 }

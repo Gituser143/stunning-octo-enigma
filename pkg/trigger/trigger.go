@@ -53,7 +53,7 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 					// 	Scale function should then calculate effect of scaling to
 					// 	donwstream services
 					baseDeps, err := tc.getBaseDeployments(ctx)
-					if err != nil && !errors.Is(err, errScaleApplication) {
+					if err != nil && errors.Is(err, errScaleApplication) {
 						log.Println("Deployments to scale are:", baseDeps)
 						tc.scaleDeployements(ctx, baseDeps)
 					}
@@ -154,11 +154,11 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 		currentService := idMap[fmt.Sprintf("%v", currentNode.Value)]
 		graphQueue.Remove(currentNode)
 
-		newQueueLength := queueLengths[currentService] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
 		for _, edge := range kialiGraph[currentService].Edges {
 			// serviceToScale refers to the child service
 			serviceToScale := kialiGraph[edge.Target].Node.Workload
-			newReplicaCount := (int)(math.Ceil(newQueueLength / queueLengthThresholds[serviceToScale]))
+			newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
+			newReplicaCount := (int)(math.Ceil(newQueueLength/queueLengthThresholds[serviceToScale])) * replicaCounts[serviceToScale]
 
 			if newReplicaCount > replicaCounts[serviceToScale] {
 				replicaCounts[serviceToScale] = newReplicaCount

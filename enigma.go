@@ -57,46 +57,12 @@ func main() {
 	// Get metrics config file path
 	filePath := flag.StringP("file", "f", "", "Path to config file or directory")
 
+	scaleAndLoad := flag.BoolP("scale-and-load", "s", false, "running scaler + simulataneously load test shit")
+
 	flag.Parse()
 
 	if *loadtest {
-		var wg sync.WaitGroup
-		wg.Add(1)
-		// TODO: Get load test parameters from configs
-		scheme := "http"
-		host := "192.168.99.103"
-		port := 30080
-
-		distributionType := "inc"
-		steps := 20
-		duration := 1
-		workers := 5
-		minRate := 10
-		maxRate := 100
-
-		namespaces := []string{"istio-teastore"}
-
-		// Init stress client
-		sc := load.NewStressClient(scheme, host, port, nil)
-		sc.SetTargetFunction(sc.GetTeaStoreTargets)
-
-		parameters := map[string]string{
-			"responseTime": "avg",
-			"throughput":   "response",
-			"duration":     "1m",
-		}
-
-		exitChan := make(chan int)
-
-		// Write queue lengths to file
-		go logQueuelengths(ctx, &tc, namespaces, parameters, exitChan, &wg)
-
-		// Begin stress test
-		sc.StressApplication(distributionType, steps, duration, workers, minRate, maxRate)
-
-		time.Sleep(30 * time.Second)
-		exitChan <- 1
-		wg.Wait()
+		loadTest(ctx, &tc, true)
 	} else {
 		if *filePath == "" {
 			flag.Usage()
@@ -151,12 +117,57 @@ func main() {
 
 		log.Println("initialised trigger client")
 
+		if *scaleAndLoad {
+			go loadTest(ctx, &tc, false)
+		}
 		// Run Trigger
 		err = tc.StartTrigger(ctx)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+}
+
+func loadTest(ctx context.Context, tc *trigger.TriggerClient, shouldLogQueueLens bool) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	// TODO: Get load test parameters from configs
+	scheme := "http"
+	host := "localhost"
+	port := 30080
+
+	distributionType := "inc"
+	steps := 50
+	duration := 1
+	workers := 50
+	minRate := 50
+	maxRate := 500
+
+	namespaces := []string{"istio-teastore"}
+
+	// Init stress client
+	sc := load.NewStressClient(scheme, host, port, nil)
+	sc.SetTargetFunction(sc.GetTeaStoreTargets)
+
+	parameters := map[string]string{
+		"responseTime": "avg",
+		"throughput":   "response",
+		"duration":     "1m",
+	}
+
+	exitChan := make(chan int)
+
+	if shouldLogQueueLens {
+		// Write queue lengths to file
+		go logQueuelengths(ctx, tc, namespaces, parameters, exitChan, &wg)
+	}
+
+	// Begin stress test
+	sc.StressApplication(distributionType, steps, duration, workers, minRate, maxRate)
+
+	time.Sleep(30 * time.Second)
+	exitChan <- 1
+	wg.Wait()
 }
 
 func logQueuelengths(

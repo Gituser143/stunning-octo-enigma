@@ -15,5 +15,8 @@ type TriggerClient struct {
 
 // SetThresholds sets the thresholds for a given trigger client
 func (tc *TriggerClient) SetThresholds(thresholds Thresholds) {
+	for k, v := range thresholds.ResourceThresholds {
+		thresholds.ResourceThresholds[k] = Resources{CPU: v.CPU / 1000}
+	}
 	tc.thresholds = thresholds
 }
