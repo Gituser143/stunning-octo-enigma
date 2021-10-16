@@ -160,6 +160,10 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 		currentService := idMap[fmt.Sprintf("%v", currentNode.Value)]
 		graphQueue.Remove(currentNode)
 
+		if _, ok := kialiGraph[currentService]; !ok {
+			continue
+		}
+
 		for _, edge := range kialiGraph[currentService].Edges {
 			if edge == nil {
 				continue
@@ -332,6 +336,9 @@ func getPodsForDeployment(deploymentName string, pods []string) []string {
 func aggregatePodMetricsToResources(metrics *v1beta1.PodMetrics) Resources {
 	r := Resources{}
 	numContainers := len(metrics.Containers)
+	if numContainers == 0 {
+		return r
+	}
 
 	var cpuSum, memSum float64
 	for _, c := range metrics.Containers {

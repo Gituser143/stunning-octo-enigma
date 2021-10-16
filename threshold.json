@@ -2,22 +2,22 @@
     "throughput": 100000,
     "thresholds": {
         "teastore-webui": {
-            "cpu": 100
+            "cpu": 600
         },
         "teastore-persistance": {
-            "cpu": 100
+            "cpu": 600
         },
         "teastore-image": {
-            "cpu": 100
+            "cpu": 600
         },
         "teastore-auth": {
-            "cpu": 100
+            "cpu": 600
         },
         "teastore-recommender": {
-            "cpu": 100
+            "cpu": 600
         },
         "teastore-registry": {
-            "cpu": 100
+            "cpu": 600
         }
     }
 }
