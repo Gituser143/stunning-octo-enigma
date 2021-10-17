@@ -13,10 +13,11 @@ import (
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 
+	// Import Auth for provider specific auth
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
-// MetricClient is a wrapper around a clientset.
+// Client is a wrapper around a clientset.
 //
 // NOTE: the *minimum* scrape interval of the metric-server
 // itself is 10 seconds. Even if we provide frequencies of
@@ -25,12 +26,12 @@ import (
 // similar values. Because of this, it would be safe to assume
 // that any and all operations that make use of these metrics
 // are long running operations.
-type MetricClient struct {
+type Client struct {
 	client *metricsv.Clientset
 }
 
 // NewMetricClient inits a new clientset from a local kubeconfig and slaps a MetricClient around it.
-func NewMetricClient() (*MetricClient, error) {
+func NewMetricClient() (*Client, error) {
 	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -44,11 +45,11 @@ func NewMetricClient() (*MetricClient, error) {
 		return nil, err
 	}
 
-	return &MetricClient{clientset}, err
+	return &Client{clientset}, err
 }
 
 // StreamAllPodMetrics returns a channel that has a []v1beta1.PodMetrics put in it every freq Duration.
-func (c *MetricClient) StreamAllPodMetrics(ctx context.Context, namespace string, freq time.Duration) <-chan []v1beta1.PodMetrics {
+func (c *Client) StreamAllPodMetrics(ctx context.Context, namespace string, freq time.Duration) <-chan []v1beta1.PodMetrics {
 	metricChan := make(chan []v1beta1.PodMetrics, 1)
 	go func() {
 		ticker := time.NewTicker(freq)
@@ -75,7 +76,7 @@ func (c *MetricClient) StreamAllPodMetrics(ctx context.Context, namespace string
 // TODO: stream pod metric, map deployment to metric type.
 
 // StreamPodMetrics returns a channel that has *v1beta1.PodMetrics put in it every freq Duration.
-func (c *MetricClient) StreamPodMetrics(ctx context.Context, namespace, name string, freq time.Duration) <-chan *v1beta1.PodMetrics {
+func (c *Client) StreamPodMetrics(ctx context.Context, namespace, name string, freq time.Duration) <-chan *v1beta1.PodMetrics {
 	metricChan := make(chan *v1beta1.PodMetrics, 1)
 	go func() {
 		ticker := time.NewTicker(freq)
@@ -100,7 +101,7 @@ func (c *MetricClient) StreamPodMetrics(ctx context.Context, namespace, name str
 }
 
 // GetAllPodMetrics returns metrics of all pods in a namespace.
-func (c *MetricClient) GetAllPodMetrics(ctx context.Context, namespace string) ([]v1beta1.PodMetrics, error) {
+func (c *Client) GetAllPodMetrics(ctx context.Context, namespace string) ([]v1beta1.PodMetrics, error) {
 	podMetrices, err := c.client.MetricsV1beta1().
 		PodMetricses(namespace).
 		List(ctx, metav1.ListOptions{})
@@ -112,6 +113,6 @@ func (c *MetricClient) GetAllPodMetrics(ctx context.Context, namespace string) (
 }
 
 // GetPodMetrics gets the metrics of a named pod in a particular namespace.
-func (c *MetricClient) GetPodMetrics(ctx context.Context, namespace, name string) (*v1beta1.PodMetrics, error) {
+func (c *Client) GetPodMetrics(ctx context.Context, namespace, name string) (*v1beta1.PodMetrics, error) {
 	return c.client.MetricsV1beta1().PodMetricses(namespace).Get(ctx, name, metav1.GetOptions{})
 }

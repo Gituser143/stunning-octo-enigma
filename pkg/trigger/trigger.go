@@ -19,7 +19,7 @@ import (
 )
 
 // StartTrigger runs the trigger indefinetely and checks for violations every 30 seconds
-func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
+func (tc *Client) StartTrigger(ctx context.Context) error {
 	t := time.NewTicker(30 * time.Second)
 	thresholds := tc.thresholds
 
@@ -79,7 +79,7 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 	}
 }
 
-func (tc *TriggerClient) getQueueLengthThresholds(fileName string) map[string]float64 {
+func (tc *Client) getQueueLengthThresholds(fileName string) map[string]float64 {
 
 	queueLengthThresholds := make(map[string]float64)
 
@@ -97,7 +97,7 @@ func (tc *TriggerClient) getQueueLengthThresholds(fileName string) map[string]fl
 	return queueLengthThresholds
 }
 
-func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[string]Resources) error {
+func (tc *Client) scaleDeployements(ctx context.Context, baseDeps map[string]Resources) error {
 
 	// Initialize an empty list used as a queue for BFS
 	graphQueue := list.New()
@@ -113,7 +113,7 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 		"duration":     "1m",
 	}
 
-	kialiGraph, err := tc.GetWorkloadGraph(ctx, namespaces, parameters)
+	kialiGraph, err := tc.KialiClient.GetWorkloadGraph(ctx, namespaces, parameters)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 	return nil
 }
 
-func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64, f *os.File) error {
+func (tc *Client) checkThroughput(ctx context.Context, throughput int64, f *os.File) error {
 	// Get Namspace graph for a namespace
 	namespaces := []string{applicationNamespace}
 	parameters := map[string]string{
@@ -226,7 +226,7 @@ func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64, 
 	}
 
 	// Get workload graph for a namespace
-	graph, err := tc.GetWorkloadGraph(ctx, namespaces, parameters)
+	graph, err := tc.KialiClient.GetWorkloadGraph(ctx, namespaces, parameters)
 	if err != nil {
 		return err
 	}
@@ -265,22 +265,22 @@ func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64, 
 	return nil
 }
 
-func (tc *TriggerClient) checkResources(ctx context.Context) error {
+func (tc *Client) checkResources(ctx context.Context) error {
 	_, err := tc.getBaseDeployments(ctx)
 	return err
 }
 
 // getBaseDeployments returns a slice of deployment names that have resource
 // utilization higher than specified threshold along with their respoective metrics
-func (tc *TriggerClient) getBaseDeployments(ctx context.Context) (map[string]Resources, error) {
+func (tc *Client) getBaseDeployments(ctx context.Context) (map[string]Resources, error) {
 	baseDeps := make(map[string]Resources)
 
-	pods, err := tc.GetPodNames(ctx, applicationNamespace)
+	pods, err := tc.K8sClient.GetPodNames(ctx, applicationNamespace)
 	if err != nil {
 		return baseDeps, err
 	}
 
-	deps, err := tc.GetDeploymentNames(ctx, applicationNamespace)
+	deps, err := tc.K8sClient.GetDeploymentNames(ctx, applicationNamespace)
 	if err != nil {
 		return baseDeps, err
 	}
@@ -323,11 +323,11 @@ func (tc *TriggerClient) getBaseDeployments(ctx context.Context) (map[string]Res
 	return baseDeps, nil
 }
 
-func (tc *TriggerClient) getPerDeploymentMetrics(ctx context.Context, depPodMap map[string][]string) map[string]Resources {
+func (tc *Client) getPerDeploymentMetrics(ctx context.Context, depPodMap map[string][]string) map[string]Resources {
 	resourceMap := make(map[string]Resources)
 	for dep, pods := range depPodMap {
 		for _, pod := range pods {
-			metrics, err := tc.GetPodMetrics(ctx, applicationNamespace, pod)
+			metrics, err := tc.MetricClient.GetPodMetrics(ctx, applicationNamespace, pod)
 			if err != nil {
 				// print out error and not return to try and get as many pod metrics
 				// as possible.
@@ -375,7 +375,7 @@ func aggregatePodMetricsToResources(metrics *v1beta1.PodMetrics) Resources {
 // getNewReplicaCounts gets replica counts for problematic deployments,
 // i. e., deployments where resource thresholds are exceeded.
 // This function returns a map of deployments to their new (HPA) replica counts
-func (tc *TriggerClient) getNewReplicaCounts(ctx context.Context, baseDeps map[string]Resources, namespace string) (map[string]int64, error) {
+func (tc *Client) getNewReplicaCounts(ctx context.Context, baseDeps map[string]Resources, namespace string) (map[string]int64, error) {
 
 	// desiredReplicas := ceil[currentReplicas * ( currentMetricValue / desiredMetricValue )]
 

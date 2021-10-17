@@ -3,17 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io/fs"
+	"errors"
 	"io/ioutil"
 	"log"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/Gituser143/stunning-octo-enigma/pkg/config"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/k8s"
-	client "github.com/Gituser143/stunning-octo-enigma/pkg/kiali-client"
+	"github.com/Gituser143/stunning-octo-enigma/pkg/kiali"
 	load "github.com/Gituser143/stunning-octo-enigma/pkg/load-generator"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/metricscraper"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/trigger"
@@ -23,15 +21,29 @@ import (
 )
 
 func main() {
+
+	// Flag definitions
+	loadtest := flag.BoolP("load", "l", false, "Load test application")
+	filePath := flag.StringP("file", "f", "config.json", "Path to config file or directory")
+	scaleAndLoad := flag.BoolP("scale-and-load", "s", false, "Running scaler and simultaneously load test application")
+
+	flag.Parse()
+
+	// Get config from config file
+	conf, err := config.GetConfig(*filePath)
+	if err != nil {
+		if errors.Is(err, config.ErrInavlidConfigPath) {
+			flag.Usage()
+		}
+		log.Fatal(err)
+	}
+	log.Println("read config file")
+
 	// Init a context
 	ctx := context.Background()
 
-	// Variables for Kiali Client
-	host := "localhost"
-	port := 20001
-
 	// Init Kiali Client
-	kc := client.NewKialiClient(host, port, nil)
+	kc := kiali.NewKialiClient(conf.KialiHost.Host, conf.KialiHost.Port, nil)
 
 	// Init Metrics Client
 	mc, err := metricscraper.NewMetricClient()
@@ -46,81 +58,20 @@ func main() {
 	}
 
 	// Init Trigger Client
-	tc := trigger.TriggerClient{
+	tc := trigger.Client{
 		KialiClient:  kc,
 		MetricClient: mc,
 		K8sClient:    k8sc,
 	}
-
-	// Check if load test phase
-	loadtest := flag.BoolP("load", "l", false, "Load test or not")
-
-	// Get metrics config file path
-	filePath := flag.StringP("file", "f", "", "Path to config file or directory")
-
-	scaleAndLoad := flag.BoolP("scale-and-load", "s", false, "running scaler + simulataneously load test shit")
-
-	flag.Parse()
+	tc.SetThresholds(conf.Thresholds)
+	log.Println("initialised trigger client")
 
 	if *loadtest {
-		loadTest(ctx, &tc, true)
-	} else {
-		if *filePath == "" {
-			flag.Usage()
-			os.Exit(1)
-		}
+		loadTest(ctx, &tc, conf, true)
+	} else if *scaleAndLoad {
+		// Run load test
+		go loadTest(ctx, &tc, conf, false)
 
-		fileInfo, err := os.Stat(*filePath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Fetch thresholds
-		var thresholds trigger.Thresholds
-
-		// TODO: Handle multiple file configs cleanly
-		if fileInfo.IsDir() {
-			err = filepath.Walk(*filePath,
-				func(path string, info fs.FileInfo, err error) error {
-					if err != nil {
-						return err
-					}
-					if !info.IsDir() {
-						bs, err := ioutil.ReadFile(path)
-						if err != nil {
-							fmt.Println("2")
-							return err
-						}
-						err = json.Unmarshal(bs, &thresholds)
-						if err != nil {
-							return err
-						}
-					}
-					return nil
-				})
-			if err != nil {
-				log.Fatal(err)
-			}
-		} else {
-			bs, err := ioutil.ReadFile(*filePath)
-			if err != nil {
-				log.Fatal(err)
-			}
-			err = json.Unmarshal(bs, &thresholds)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-
-		log.Println("read config file")
-
-		tc.SetThresholds(thresholds)
-
-		log.Println("initialised trigger client")
-
-		if *scaleAndLoad {
-			go loadTest(ctx, &tc, false)
-		}
 		// Run Trigger
 		err = tc.StartTrigger(ctx)
 		if err != nil {
@@ -129,30 +80,17 @@ func main() {
 	}
 }
 
-func loadTest(ctx context.Context, tc *trigger.TriggerClient, shouldLogQueueLens bool) {
+func loadTest(ctx context.Context, tc *trigger.Client, conf config.Config, shouldLogQueueLens bool) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Wait()
 
-	// TODO: Get load test parameters from configs
-	scheme := "http"
-	host := os.Getenv("TEASTORE_HOST")
-	if host == "" {
-		log.Fatal("TEASTORE_HOST env not set")
+	if conf.AppHost.Scheme == "" {
+		conf.AppHost.Scheme = "http"
 	}
-	port := 8080
-
-	distributionType := "inc"
-	steps := 50
-	duration := 15
-	workers := 50
-	minRate := 100
-	maxRate := 1000
-
-	namespaces := []string{"istio-teastore"}
 
 	// Init stress client
-	sc := load.NewStressClient(scheme, host, port, nil)
+	sc := load.NewStressClient(conf.AppHost.Scheme, conf.AppHost.Host, conf.AppHost.Port, nil)
 	sc.SetTargetFunction(sc.GetTeaStoreTargets)
 
 	parameters := map[string]string{
@@ -165,19 +103,20 @@ func loadTest(ctx context.Context, tc *trigger.TriggerClient, shouldLogQueueLens
 
 	if shouldLogQueueLens {
 		// Write queue lengths to file
-		go logQueuelengths(ctx, tc, namespaces, parameters, exitChan, &wg)
+		go logQueuelengths(ctx, tc, conf.Namespaces, parameters, exitChan, &wg)
 	}
 
 	// Begin stress test
-	sc.StressApplication(distributionType, steps, duration, workers, minRate, maxRate)
+	sc.StressApplication(conf.LoadConfig)
 
+	log.Println("Finished load testing on application")
 	time.Sleep(10 * time.Second)
 	exitChan <- 1
 }
 
 func logQueuelengths(
 	ctx context.Context,
-	tc *trigger.TriggerClient,
+	tc *trigger.Client,
 	namespaces []string,
 	parameters map[string]string,
 	exitChan chan int,
@@ -207,7 +146,7 @@ func logQueuelengths(
 		select {
 		case <-t.C:
 			// Get workload graph for a namespace
-			graph, err := tc.GetWorkloadGraph(egCtx, namespaces, parameters)
+			graph, err := tc.KialiClient.GetWorkloadGraph(egCtx, namespaces, parameters)
 			if err != nil {
 				log.Println(err)
 			} else {

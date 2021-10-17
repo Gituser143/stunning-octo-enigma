@@ -1,4 +1,4 @@
-package client
+package kiali
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 )
 
 // GetWorkloadGraph gives the workload graph for a specified workload in a namespace
-func (kc *KialiClient) GetWorkloadGraph(ctx context.Context, namespaces []string, parameters map[string]string) (Graph, error) {
+func (kc *Client) GetWorkloadGraph(ctx context.Context, namespaces []string, parameters map[string]string) (Graph, error) {
 	endpoint := "kiali/api/namespaces/graph"
 	parameters["namespaces"] = strings.Join(namespaces, ",")
 
@@ -49,7 +49,7 @@ func (kc *KialiClient) GetWorkloadGraph(ctx context.Context, namespaces []string
 }
 
 // sendRequest constructs a request, sends it and returns the response body as a string
-func (kc *KialiClient) sendRequest(ctx context.Context, method, url string) ([]byte, error) {
+func (kc *Client) sendRequest(ctx context.Context, method, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return nil, err

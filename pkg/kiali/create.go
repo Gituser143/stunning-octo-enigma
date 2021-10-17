@@ -1,4 +1,4 @@
-package client
+package kiali
 
 import (
 	graph "github.com/kiali/kiali/graph/config/cytoscape"
