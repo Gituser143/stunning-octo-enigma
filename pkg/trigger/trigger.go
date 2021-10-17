@@ -171,7 +171,7 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 		currentNode := graphQueue.Front()
 		// curentService here refers to the parent service
 		currentService := idMap[fmt.Sprintf("%v", currentNode.Value)]
-		log.Printf("calculating effect for service %s\n", currentService)
+		log.Printf("calculating effect for service %s\n", currentNode.Value)
 		graphQueue.Remove(currentNode)
 
 		if _, ok := kialiGraph[currentService]; !ok {
@@ -187,13 +187,13 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 			newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
 			newReplicaCount := (int)(math.Ceil(newQueueLength/queueLengthThresholds[serviceToScale])) * replicaCounts[serviceToScale]
 
+			log.Printf(
+				"[service: %s] old ql: %f, new ql: %f\n",
+				serviceToScale,
+				queueLengths[serviceToScale],
+				newQueueLength,
+			)
 			if newReplicaCount > replicaCounts[serviceToScale] {
-				log.Printf(
-					"[service: %s] old ql: %f, new ql: %f\n",
-					serviceToScale,
-					queueLengths[serviceToScale],
-					newQueueLength,
-				)
 				replicaCounts[serviceToScale] = newReplicaCount
 				graphQueue.PushBack(serviceToScale)
 			}
