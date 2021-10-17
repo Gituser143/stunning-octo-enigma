@@ -10,20 +10,20 @@ function scale_to_one {
     kubectl get deployments -n istio-teastore | awk '{print $1}' | tail -n +2 | xargs kubectl scale --replicas=1 deployment -n istio-teastore
 }
 
-if [[ $# -lt 1 ]]; do
-    echo "missing args: need evicted or scale"
+if [[ $# -lt 1 ]]; then
+    echo "missing args: need [evicted | scale | all]"
     exit 1
-done
+fi
 
-if [[ $1 == "all" ]]; do
-   clean_evicted
-   scale_to_one
-done
-
-if [[ $1 == "evicted" ]]; do
+if [[ $1 == "all" ]]; then
     clean_evicted
-done
-
-if [[ $1 == "scale" ]]; do
     scale_to_one
-done
+fi
+
+if [[ $1 == "evicted" ]]; then
+    clean_evicted
+fi
+
+if [[ $1 == "scale" ]]; then
+    scale_to_one
+fi

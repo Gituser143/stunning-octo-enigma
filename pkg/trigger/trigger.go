@@ -24,6 +24,13 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 	t := time.NewTicker(30 * time.Second)
 	thresholds := tc.thresholds
 
+	f, err := os.OpenFile("throughput.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+
+	defer f.Close()
+
 	for {
 
 		select {
@@ -33,7 +40,7 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 		case <-t.C:
 			// Check for throughput violations
 			eg.Go(func() error {
-				return tc.checkThroughput(egCtx, thresholds.Throughput)
+				return tc.checkThroughput(egCtx, thresholds.Throughput, f)
 			})
 
 			// Check for resource thresholds exceeding and get corresponding
@@ -202,7 +209,7 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 	return nil
 }
 
-func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) error {
+func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64, f *os.File) error {
 	// Get Namspace graph for a namespace
 	namespaces := []string{applicationNamespace}
 	parameters := map[string]string{
@@ -237,6 +244,11 @@ func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) 
 	for _, edge := range item.Edges {
 		t, _ := strconv.ParseInt(edge.Throughput, 10, 64)
 		currentThroughput += t
+	}
+
+	ts := fmt.Sprintf("%d,%v\n", currentThroughput, time.Now())
+	if _, err := f.WriteString(ts); err != nil {
+		log.Println(err)
 	}
 
 	if currentThroughput < throughput {
