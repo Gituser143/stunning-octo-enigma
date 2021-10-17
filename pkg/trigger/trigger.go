@@ -158,6 +158,7 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 		currentNode := graphQueue.Front()
 		// curentService here refers to the parent service
 		currentService := idMap[fmt.Sprintf("%v", currentNode.Value)]
+		log.Printf("calculating effect for service %s\n", currentService)
 		graphQueue.Remove(currentNode)
 
 		for _, edge := range kialiGraph[currentService].Edges {
