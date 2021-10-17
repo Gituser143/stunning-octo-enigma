@@ -146,8 +146,8 @@ func loadTest(ctx context.Context, tc *trigger.TriggerClient, shouldLogQueueLens
 	steps := 50
 	duration := 15
 	workers := 50
-	minRate := 50
-	maxRate := 500
+	minRate := 100
+	maxRate := 1000
 
 	namespaces := []string{"istio-teastore"}
 

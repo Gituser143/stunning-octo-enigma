@@ -194,12 +194,6 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 					queueLengths[serviceToScale],
 					newQueueLength,
 				)
-				log.Printf(
-					"[replicas for: %s] old replica count: %d, new replica count: %d\n\n",
-					serviceToScale,
-					replicaCounts[serviceToScale],
-					newReplicaCount,
-				)
 				replicaCounts[serviceToScale] = newReplicaCount
 				graphQueue.PushBack(serviceToScale)
 			}
@@ -208,6 +202,12 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 
 	for service, replicaCount := range replicaCounts {
 		if replicaCount > oldReplicaCounts[service] {
+			log.Printf(
+				"[replicas for: %s] old replica count: %d, new replica count: %d\n",
+				service,
+				oldReplicaCounts[service],
+				replicaCount,
+			)
 			tc.K8sClient.ScaleDeployment(ctx, applicationNamespace, service, int32(replicaCount))
 		}
 	}
