@@ -203,10 +203,11 @@ func logQueuelengths(
 	t := time.NewTicker(3 * time.Second)
 
 	for {
+		egCtx, cancel := context.WithCancel(ctx)
 		select {
 		case <-t.C:
 			// Get workload graph for a namespace
-			graph, err := tc.GetWorkloadGraph(ctx, namespaces, parameters)
+			graph, err := tc.GetWorkloadGraph(egCtx, namespaces, parameters)
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -226,10 +227,11 @@ func logQueuelengths(
 			}
 
 		case <-exitChan:
+			cancel()
 			return
 
-		case <-ctx.Done():
-			return
+		case err := <-egCtx.Done():
+			log.Println("Context cancelled", err)
 		}
 	}
 }

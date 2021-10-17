@@ -20,7 +20,6 @@ import (
 
 // StartTrigger runs the trigger indefinetely and checks for violations every 30 seconds
 func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
-	eg, egCtx := errgroup.WithContext(ctx)
 	t := time.NewTicker(30 * time.Second)
 	thresholds := tc.thresholds
 
@@ -32,6 +31,7 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 	defer f.Close()
 
 	for {
+		eg, egCtx := errgroup.WithContext(ctx)
 
 		select {
 		case <-ctx.Done():
@@ -59,11 +59,17 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 					// 	at which trigger occured
 					// 	Scale function should then calculate effect of scaling to
 					// 	donwstream services
-					baseDeps, err := tc.getBaseDeployments(ctx)
+
+					depCtx, cancel := context.WithCancel(ctx)
+					defer cancel()
+
+					baseDeps, err := tc.getBaseDeployments(depCtx)
 					if err != nil && errors.Is(err, errScaleApplication) {
 						log.Println("Deployments to scale are:", baseDeps)
-						tc.scaleDeployements(ctx, baseDeps)
+						tc.scaleDeployements(depCtx, baseDeps)
 					}
+				} else if errors.Is(err, context.Canceled) {
+					log.Println(err)
 				} else {
 					log.Println("no resource thresholds crossed, not scaling")
 					return err
