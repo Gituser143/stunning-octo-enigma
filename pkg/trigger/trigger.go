@@ -171,6 +171,7 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 		currentNode := graphQueue.Front()
 		// curentService here refers to the parent service
 		currentService := idMap[fmt.Sprintf("%v", currentNode.Value)]
+		currentServiceName := fmt.Sprintf("%v", currentNode.Value)
 		log.Printf("calculating effect for service %s\n", currentNode.Value)
 		graphQueue.Remove(currentNode)
 
@@ -184,7 +185,7 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 			}
 			// serviceToScale refers to the child service
 			serviceToScale := kialiGraph[edge.Target].Node.Workload
-			newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
+			newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentServiceName]) / float64(oldReplicaCounts[currentServiceName])
 			newReplicaCount := (int)(math.Ceil(newQueueLength/queueLengthThresholds[serviceToScale])) * replicaCounts[serviceToScale]
 
 			log.Printf(
