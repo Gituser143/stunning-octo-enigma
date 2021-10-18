@@ -123,7 +123,7 @@ func (tc *Client) scaleDeployements(ctx context.Context, baseDeps map[string]Res
 	parameters := map[string]string{
 		"responseTime": "avg",
 		"throughput":   "response",
-		"duration":     "1m",
+		"duration":     "5m",
 	}
 
 	kialiGraph, err := tc.KialiClient.GetWorkloadGraph(ctx, namespaces, parameters)
@@ -247,7 +247,7 @@ func (tc *Client) getE2EThroughput(ctx context.Context) (int64, error) {
 	parameters := map[string]string{
 		"responseTime": "avg",
 		"throughput":   "response",
-		"duration":     "1m",
+		"duration":     "5m",
 	}
 
 	// Get workload graph for a namespace
