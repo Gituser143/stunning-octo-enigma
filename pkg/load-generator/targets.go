@@ -98,10 +98,10 @@ func (sc *StressClient) getProductEndpoints() []vegeta.Target {
 		url2 := url.URL{
 			Scheme: sc.scheme,
 			Host:   sc.host,
-			Path:   "tools.descartes.teastore.webui/cartAction",
+			Path:   "tools.descartes.teastore.webui/product",
 		}
-		q2 := url1.Query()
-		q2.Add("productid", fmt.Sprintf("%d", productID))
+		q2 := url2.Query()
+		q2.Add("id", fmt.Sprintf("%d", productID))
 		url2.RawQuery = q2.Encode()
 
 		target1 := vegeta.Target{
