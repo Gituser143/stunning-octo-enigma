@@ -21,6 +21,8 @@ import (
 // StartTrigger runs the trigger indefinetely and checks for violations every 30 seconds
 func (tc *Client) StartTrigger(ctx context.Context) error {
 	t := time.NewTicker(30 * time.Second)
+	logTicker := time.NewTicker(3 * time.Second)
+
 	thresholds := tc.thresholds
 
 	f, err := os.OpenFile("throughput.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -37,10 +39,21 @@ func (tc *Client) StartTrigger(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 
+		case <-logTicker.C:
+			throughput, err := tc.getE2EThroughput(ctx)
+			if err != nil {
+				log.Println("error getting e2e throughput:", err)
+			} else {
+				ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
+				if _, err := f.WriteString(ts); err != nil {
+					log.Println(err)
+				}
+			}
+
 		case <-t.C:
 			// Check for throughput violations
 			eg.Go(func() error {
-				return tc.checkThroughput(egCtx, thresholds.Throughput, f)
+				return tc.checkThroughput(egCtx, thresholds.Throughput)
 			})
 
 			// Check for resource thresholds exceeding and get corresponding
@@ -216,8 +229,20 @@ func (tc *Client) scaleDeployements(ctx context.Context, baseDeps map[string]Res
 	return nil
 }
 
-func (tc *Client) checkThroughput(ctx context.Context, throughput int64, f *os.File) error {
-	// Get Namspace graph for a namespace
+func (tc *Client) checkThroughput(ctx context.Context, throughput int64) error {
+	currentThroughput, err := tc.getE2EThroughput(ctx)
+	if err != nil {
+		return err
+	}
+
+	if currentThroughput < throughput {
+		return errScaleApplication
+	}
+
+	return nil
+}
+
+func (tc *Client) getE2EThroughput(ctx context.Context) (int64, error) {
 	namespaces := []string{applicationNamespace}
 	parameters := map[string]string{
 		"responseTime": "avg",
@@ -228,7 +253,7 @@ func (tc *Client) checkThroughput(ctx context.Context, throughput int64, f *os.F
 	// Get workload graph for a namespace
 	graph, err := tc.KialiClient.GetWorkloadGraph(ctx, namespaces, parameters)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	// Get Unkown ID
@@ -241,7 +266,7 @@ func (tc *Client) checkThroughput(ctx context.Context, throughput int64, f *os.F
 	}
 
 	if unknownID == "" {
-		return errors.New("no unkown service")
+		return -1, errors.New("no unkown service")
 	}
 
 	item := graph[unknownID]
@@ -253,16 +278,7 @@ func (tc *Client) checkThroughput(ctx context.Context, throughput int64, f *os.F
 		currentThroughput += t
 	}
 
-	ts := fmt.Sprintf("%d,%v\n", currentThroughput, time.Now())
-	if _, err := f.WriteString(ts); err != nil {
-		log.Println(err)
-	}
-
-	if currentThroughput < throughput {
-		return errScaleApplication
-	}
-
-	return nil
+	return currentThroughput, nil
 }
 
 func (tc *Client) checkResources(ctx context.Context) error {
