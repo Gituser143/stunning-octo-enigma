@@ -126,8 +126,10 @@ func (sc *StressClient) GetTeaStoreTargets() []vegeta.Target {
 	var targets []vegeta.Target
 
 	targets = append(targets, sc.checkStatus())
-	targets = append(targets, sc.checkFailedLogin())
-	targets = append(targets, sc.checkSuccessfulLogin())
+	for i := 0; i < 10; i++ {
+		targets = append(targets, sc.checkFailedLogin())
+		targets = append(targets, sc.checkSuccessfulLogin())
+	}
 	targets = append(targets, sc.getCategoryEndpoints()...)
 	targets = append(targets, sc.getProductEndpoints()...)
 
