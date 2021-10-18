@@ -37,7 +37,7 @@ func (tc *Client) StartTrigger(ctx context.Context) error {
 				return
 
 			case <-logTicker.C:
-				throughput, err := tc.getE2EThroughput(ctx)
+				throughput, err := tc.GetE2EThroughput(ctx)
 				if err != nil {
 					log.Println("error getting e2e throughput:", err)
 				} else {
@@ -237,7 +237,7 @@ func (tc *Client) scaleDeployements(ctx context.Context, baseDeps map[string]Res
 }
 
 func (tc *Client) checkThroughput(ctx context.Context, throughput int64) error {
-	currentThroughput, err := tc.getE2EThroughput(ctx)
+	currentThroughput, err := tc.GetE2EThroughput(ctx)
 	if err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ func (tc *Client) checkThroughput(ctx context.Context, throughput int64) error {
 	return nil
 }
 
-func (tc *Client) getE2EThroughput(ctx context.Context) (int64, error) {
+func (tc *Client) GetE2EThroughput(ctx context.Context) (int64, error) {
 	namespaces := []string{applicationNamespace}
 	parameters := map[string]string{
 		"responseTime": "avg",

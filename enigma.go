@@ -82,6 +82,25 @@ func main() {
 	}
 }
 
+func printThrpughput(ctx context.Context, tc *trigger.Client) {
+	f, err := os.OpenFile("throughput_load.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+
+	defer f.Close()
+
+	throughput, err := tc.GetE2EThroughput(ctx)
+	if err != nil {
+		log.Println("error getting e2e throughput:", err)
+	} else {
+		ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
+		if _, err := f.WriteString(ts); err != nil {
+			log.Println(err)
+		}
+	}
+}
+
 func loadTest(ctx context.Context, tc *trigger.Client, conf config.Config, shouldLogQueueLens bool) {
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -106,6 +125,7 @@ func loadTest(ctx context.Context, tc *trigger.Client, conf config.Config, shoul
 	if shouldLogQueueLens {
 		// Write queue lengths to file
 		go logQueuelengths(ctx, tc, conf.Namespaces, parameters, exitChan, &wg)
+		go printThrpughput(ctx, tc)
 	}
 
 	// Begin stress test
