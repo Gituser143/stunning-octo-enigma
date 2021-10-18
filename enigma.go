@@ -90,13 +90,22 @@ func printThrpughput(ctx context.Context, tc *trigger.Client) {
 
 	defer f.Close()
 
-	throughput, err := tc.GetE2EThroughput(ctx)
-	if err != nil {
-		log.Println("error getting e2e throughput:", err)
-	} else {
-		ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
-		if _, err := f.WriteString(ts); err != nil {
-			log.Println(err)
+	logTicker := time.NewTicker(3 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-logTicker.C:
+			throughput, err := tc.GetE2EThroughput(ctx)
+			if err != nil {
+				log.Println("error getting e2e throughput:", err)
+			} else {
+				ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
+				if _, err := f.WriteString(ts); err != nil {
+					log.Println(err)
+				}
+			}
 		}
 	}
 }
