@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -84,13 +83,13 @@ func (g Graph) GetQueueLengths() (map[string]float64, float64) {
 			throughput, err := strconv.ParseFloat(edge.Throughput, 64)
 			if err != nil {
 				throughput = 0
-				log.Println("throughput", err, item.Node.Workload, depName)
+				// log.Println("throughput", err, item.Node.Workload, depName)
 			}
 
 			responseTime, err := strconv.ParseFloat(edge.ResponseTime, 64)
 			if err != nil {
 				responseTime = 0
-				log.Println("response time", err, item.Node.Workload, depName)
+				// log.Println("response time", err, item.Node.Workload, depName)
 			}
 
 			// Sum up item's queue lengths as throughput * response time

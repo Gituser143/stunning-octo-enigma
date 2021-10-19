@@ -2,7 +2,6 @@ package metricscraper
 
 import (
 	"context"
-	"log"
 	"path/filepath"
 	"time"
 
@@ -63,7 +62,7 @@ func (c *Client) StreamAllPodMetrics(ctx context.Context, namespace string, freq
 				metrics, err := c.GetAllPodMetrics(ctx, namespace)
 				// hack. just log error, don't really do anything about it for now.
 				if err != nil {
-					log.Println(err)
+					// log.Println(err)
 				}
 				metricChan <- metrics
 			}
@@ -90,7 +89,7 @@ func (c *Client) StreamPodMetrics(ctx context.Context, namespace, name string, f
 				metrics, err := c.GetPodMetrics(ctx, namespace, name)
 				// hack. just log error, don't really do anything about it for now.
 				if err != nil {
-					log.Println(err)
+					// log.Println(err)
 				}
 				metricChan <- metrics
 			}

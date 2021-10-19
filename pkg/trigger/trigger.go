@@ -27,7 +27,7 @@ func (tc *Client) StartTrigger(ctx context.Context) error {
 		logTicker := time.NewTicker(3 * time.Second)
 		f, err := os.OpenFile("throughput.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			log.Println(err)
+			// log.Println(err)
 		}
 
 		defer f.Close()
@@ -39,11 +39,11 @@ func (tc *Client) StartTrigger(ctx context.Context) error {
 			case <-logTicker.C:
 				throughput, err := tc.GetE2EThroughput(ctx)
 				if err != nil {
-					log.Println("error getting e2e throughput:", err)
+					// log.Println("error getting e2e throughput:", err)
 				} else {
 					ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
 					if _, err := f.WriteString(ts); err != nil {
-						log.Println(err)
+						// log.Println(err)
 					}
 				}
 			}
@@ -89,7 +89,7 @@ func (tc *Client) StartTrigger(ctx context.Context) error {
 						tc.scaleDeployements(depCtx, baseDeps)
 					}
 				} else if errors.Is(err, context.Canceled) {
-					log.Println(err)
+					// log.Println(err)
 				} else {
 					log.Println("no resource thresholds crossed, not scaling")
 					return err
@@ -106,7 +106,7 @@ func (tc *Client) getQueueLengthThresholds(fileName string) map[string]float64 {
 	jsonFile, err := os.Open(fileName)
 
 	if err != nil {
-		log.Println(err)
+		// log.Println(err)
 	}
 
 	defer jsonFile.Close()
@@ -354,7 +354,7 @@ func (tc *Client) getPerDeploymentMetrics(ctx context.Context, depPodMap map[str
 			if err != nil {
 				// print out error and not return to try and get as many pod metrics
 				// as possible.
-				log.Printf("error %s getting metrics of pod %s", err.Error(), pod)
+				// log.Printf("error %s getting metrics of pod %s", err.Error(), pod)
 			}
 			resourceMap[dep] = aggregatePodMetricsToResources(metrics)
 		}
