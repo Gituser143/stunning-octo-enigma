@@ -20,7 +20,7 @@ import (
 
 // StartTrigger runs the trigger indefinetely and checks for violations every 30 seconds
 func (tc *Client) StartTrigger(ctx context.Context) error {
-	t := time.NewTicker(30 * time.Second)
+	t := time.NewTicker(15 * time.Second)
 	thresholds := tc.thresholds
 
 	go func() {
@@ -92,7 +92,7 @@ func (tc *Client) StartTrigger(ctx context.Context) error {
 					// log.Println(err)
 				} else {
 					log.Println("no resource thresholds crossed, not scaling")
-					return err
+					// return err
 				}
 			}
 		}
