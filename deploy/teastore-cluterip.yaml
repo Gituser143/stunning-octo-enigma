@@ -250,13 +250,6 @@ spec:
       containers:
         - name: teastore-webui
           image: descartesresearch/teastore-webui
-          resources:
-            limits:
-              memory: "200Mi"
-              cpu: "700m"
-            requests:
-              memory: "200Mi"
-              cpu: "700m"
           ports:
             - containerPort: 8080
           env:
