@@ -205,7 +205,16 @@ func (tc *Client) scaleDeployements(ctx context.Context, baseDeps map[string]Res
 			}
 			// serviceToScale refers to the child service
 			serviceToScale := kialiGraph[edge.Target].Node.Workload
-			newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentServiceName]) / float64(oldReplicaCounts[currentServiceName])
+			// current formula :
+			// 	newQ = oldQueue * parent_rc / service_rc
+			//  N = parent_rc/service_rc
+			// newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentServiceName]) / float64(oldReplicaCounts[currentServiceName])
+
+			// New formula :
+			// 	newQ = oldQueue * ( (parent_rc/service_rc) / ( (parent_rc/service_rc) + (parent_rc/service_rc)^2 + 1 ) )
+			N := float64(replicaCounts[currentServiceName]) / float64(oldReplicaCounts[currentServiceName])
+			newQueueLength := queueLengths[serviceToScale] * (N / (N + N*N + 1))
+
 			newReplicaCount := (int)(math.Ceil(newQueueLength/queueLengthThresholds[serviceToScale])) * replicaCounts[serviceToScale]
 
 			log.Printf(
