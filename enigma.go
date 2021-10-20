@@ -28,9 +28,9 @@ func main() {
 	loadtest := flag.BoolP("load", "l", false, "Load test application")
 	filePath := flag.StringP("file", "f", "config.json", "Path to config file or directory")
 	scaleAndLoad := flag.BoolP("scale-and-load", "s", false, "Running scaler and simultaneously load test application")
-	shouldLogReplicaCounts := flag.BoolP("logrc", "r", false, "Log replica counts of application deployments to file")
-	shouldLogThroughput := flag.BoolP("logth", "t", false, "Log e2e throughput of application")
-	shouldLogQueueLens := flag.BoolP("logq", "q", false, "Log queue lengths and create json with threshold queue lengths for each deployment of application")
+	shouldLogReplicaCounts := flag.BoolP("logrc", "r", false, "Log replica counts of application deployments to file (use alongside l or s)")
+	shouldLogThroughput := flag.BoolP("logth", "t", false, "Log e2e throughput of application (use alongside l or s)")
+	shouldLogQueueLens := flag.BoolP("logq", "q", false, "Log queue lengths and create json with threshold queue lengths for each deployment of application (use alongside l)")
 	flag.Parse()
 
 	// Get config from config file
@@ -254,7 +254,7 @@ func logQueuelengths(
 			cancel()
 			return
 
-		case err := <-egCtx.Done():
+			// case err := <-egCtx.Done():
 			// log.Println("Context cancelled", err)
 		}
 	}
