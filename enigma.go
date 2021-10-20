@@ -28,7 +28,9 @@ func main() {
 	loadtest := flag.BoolP("load", "l", false, "Load test application")
 	filePath := flag.StringP("file", "f", "config.json", "Path to config file or directory")
 	scaleAndLoad := flag.BoolP("scale-and-load", "s", false, "Running scaler and simultaneously load test application")
-
+	shouldLogReplicaCounts := flag.BoolP("logrc", "r", false, "Log replica counts of application deployments to file")
+	shouldLogThroughput := flag.BoolP("logth", "t", false, "Log e2e throughput of application")
+	shouldLogQueueLens := flag.BoolP("logq", "q", false, "Log queue lengths and create json with threshold queue lengths for each deployment of application")
 	flag.Parse()
 
 	// Get config from config file
@@ -69,10 +71,10 @@ func main() {
 	log.Println("initialised trigger client")
 
 	if *loadtest {
-		loadTest(ctx, &tc, conf, true)
+		loadTest(ctx, &tc, conf, *shouldLogQueueLens, *shouldLogReplicaCounts, *shouldLogThroughput)
 	} else if *scaleAndLoad {
 		// Run load test
-		go loadTest(ctx, &tc, conf, false)
+		go loadTest(ctx, &tc, conf, *shouldLogQueueLens, *shouldLogReplicaCounts, *shouldLogThroughput)
 
 		// Run Trigger
 		err = tc.StartTrigger(ctx)
@@ -137,7 +139,13 @@ func printReplicaCount(ctx context.Context, tc *trigger.Client, namespace string
 	}
 }
 
-func loadTest(ctx context.Context, tc *trigger.Client, conf config.Config, shouldLogQueueLens bool) {
+func loadTest(
+	ctx context.Context,
+	tc *trigger.Client,
+	conf config.Config,
+	shouldLogQueueLens bool,
+	shouldLogReplicaCounts bool,
+	shouldLogThroughput bool) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Wait()
@@ -161,9 +169,15 @@ func loadTest(ctx context.Context, tc *trigger.Client, conf config.Config, shoul
 	if shouldLogQueueLens {
 		// Write queue lengths to file
 		go logQueuelengths(ctx, tc, conf.Namespaces, parameters, exitChan, &wg)
-		go printThrpughput(ctx, tc)
+	}
+
+	if shouldLogReplicaCounts {
 		// Print replica counts every 5 seconds to file
 		go printReplicaCount(ctx, tc, conf.Namespaces[0])
+	}
+
+	if shouldLogThroughput {
+		go printThrpughput(ctx, tc)
 	}
 
 	// Begin stress test
