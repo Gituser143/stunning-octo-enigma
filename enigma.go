@@ -50,13 +50,13 @@ func main() {
 	// Init Metrics Client
 	mc, err := metricscraper.NewMetricClient()
 	if err != nil {
-		log.Fatal("failied to init metrics client: ", err)
+		log.Fatal("failed to init metrics client: ", err)
 	}
 
 	// Init K8s Client
 	k8sc, err := k8s.NewK8sClient()
 	if err != nil {
-		log.Fatal("failied to init k8s client")
+		log.Fatal("failed to init k8s client")
 	}
 
 	// Init Trigger Client
@@ -85,7 +85,7 @@ func main() {
 func printThrpughput(ctx context.Context, tc *trigger.Client) {
 	f, err := os.OpenFile("throughput_load.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Println(err)
+		// // log.Println(err)
 	}
 
 	defer f.Close()
@@ -99,11 +99,38 @@ func printThrpughput(ctx context.Context, tc *trigger.Client) {
 		case <-logTicker.C:
 			throughput, err := tc.GetE2EThroughput(ctx)
 			if err != nil {
-				log.Println("error getting e2e throughput:", err)
+				// log.Println("error getting e2e throughput:", err)
 			} else {
 				ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
 				if _, err := f.WriteString(ts); err != nil {
-					log.Println(err)
+					// // log.Println(err)
+				}
+			}
+		}
+	}
+}
+
+func printReplicaCount(ctx context.Context, tc *trigger.Client, namespace string) {
+	f, err := os.OpenFile("replica_counts.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		// log.Println(err)
+	}
+
+	defer f.Close()
+
+	deployments, _ := tc.K8sClient.GetDeploymentNames(ctx, namespace)
+	logTicker := time.NewTicker(5 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-logTicker.C:
+			for _, dep := range deployments {
+				replicaCount, _ := tc.K8sClient.GetCurrentReplicaCount(ctx, namespace, dep)
+				ts := fmt.Sprintf("%s,%d,%v\n", dep, replicaCount, time.Now())
+				if _, err := f.WriteString(ts); err != nil {
+					// log.Println(err)
 				}
 			}
 		}
@@ -135,6 +162,8 @@ func loadTest(ctx context.Context, tc *trigger.Client, conf config.Config, shoul
 		// Write queue lengths to file
 		go logQueuelengths(ctx, tc, conf.Namespaces, parameters, exitChan, &wg)
 		go printThrpughput(ctx, tc)
+		// Print replica counts every 5 seconds to file
+		go printReplicaCount(ctx, tc, conf.Namespaces[0])
 	}
 
 	// Begin stress test
@@ -157,7 +186,7 @@ func logQueuelengths(
 
 	f, err := os.OpenFile("queue_lengths.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Println(err)
+		// // log.Println(err)
 	}
 
 	defer f.Close()
@@ -186,7 +215,7 @@ func logQueuelengths(
 			// Get workload graph for a namespace
 			graph, err := tc.KialiClient.GetWorkloadGraph(egCtx, namespaces, parameters)
 			if err != nil {
-				log.Println(err)
+				// // log.Println(err)
 			} else {
 				// Extract queue lengths from graph
 				queueLengths, _ := graph.GetQueueLengths()
@@ -202,7 +231,7 @@ func logQueuelengths(
 					}
 					qs := fmt.Sprintf("%s,%f,%v\n", dep, q, time.Now())
 					if _, err := f.WriteString(qs); err != nil {
-						log.Println(err)
+						// // log.Println(err)
 					}
 				}
 			}
@@ -212,7 +241,7 @@ func logQueuelengths(
 			return
 
 		case err := <-egCtx.Done():
-			log.Println("Context cancelled", err)
+			// log.Println("Context cancelled", err)
 		}
 	}
 }
