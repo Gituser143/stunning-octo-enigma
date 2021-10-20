@@ -23,32 +23,32 @@ func (tc *Client) StartTrigger(ctx context.Context) error {
 	t := time.NewTicker(15 * time.Second)
 	thresholds := tc.thresholds
 
-	go func() {
-		logTicker := time.NewTicker(3 * time.Second)
-		f, err := os.OpenFile("throughput.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			// log.Println(err)
-		}
+	// go func() {
+	// 	logTicker := time.NewTicker(3 * time.Second)
+	// 	f, err := os.OpenFile("throughput.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// 	if err != nil {
+	// 		// log.Println(err)
+	// 	}
 
-		defer f.Close()
-		for {
-			select {
-			case <-ctx.Done():
-				return
+	// 	defer f.Close()
+	// 	for {
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			return
 
-			case <-logTicker.C:
-				throughput, err := tc.GetE2EThroughput(ctx)
-				if err != nil {
-					// log.Println("error getting e2e throughput:", err)
-				} else {
-					ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
-					if _, err := f.WriteString(ts); err != nil {
-						// log.Println(err)
-					}
-				}
-			}
-		}
-	}()
+	// 		case <-logTicker.C:
+	// 			throughput, err := tc.GetE2EThroughput(ctx)
+	// 			if err != nil {
+	// 				// log.Println("error getting e2e throughput:", err)
+	// 			} else {
+	// 				ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
+	// 				if _, err := f.WriteString(ts); err != nil {
+	// 					// log.Println(err)
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }()
 
 	for {
 		eg, egCtx := errgroup.WithContext(ctx)
