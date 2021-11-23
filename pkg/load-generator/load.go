@@ -56,6 +56,7 @@ func (sc *StressClient) StressApplication(conf config.LoadParameters) {
 	fmt.Println(conf, distribution)
 
 	for _, frequency := range distribution {
+		fmt.Println("Frequency: ", frequency)
 		rate := vegeta.Rate{Freq: frequency, Per: time.Second}
 		attackerFunc := vegeta.Workers(uint64(conf.Workers))
 		attacker := vegeta.NewAttacker(attackerFunc)
