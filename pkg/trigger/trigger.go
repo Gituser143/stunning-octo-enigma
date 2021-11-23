@@ -249,6 +249,7 @@ func (tc *Client) checkThroughput(ctx context.Context, throughput int64) error {
 	currentThroughput, err := tc.GetE2EThroughput(ctx)
 	log.Println("E2E Throughput: ", currentThroughput)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
