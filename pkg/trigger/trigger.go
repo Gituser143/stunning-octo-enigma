@@ -297,6 +297,45 @@ func (tc *Client) GetE2EThroughput(ctx context.Context) (int64, error) {
 	return currentThroughput, nil
 }
 
+func (tc *Client) GetRequestRate(ctx context.Context) (float64, error) {
+	namespaces := []string{applicationNamespace}
+	parameters := map[string]string{
+		"responseTime": "avg",
+		"throughput":   "response",
+		"duration":     "5m",
+	}
+
+	// Get workload graph for a namespace
+	graph, err := tc.KialiClient.GetWorkloadGraph(ctx, namespaces, parameters)
+	if err != nil {
+		return -1, err
+	}
+
+	// Get Unkown ID
+	unknownID := ""
+	for service, item := range graph {
+		if item.Node.Workload == "unknown" {
+			unknownID = service
+			break
+		}
+	}
+
+	if unknownID == "" {
+		return -1, errors.New("no unkown service")
+	}
+
+	item := graph[unknownID]
+	currentRequestRate := float64(0)
+
+	// Calculate e2e throughput as sum of throughput at unknowns
+	for _, edge := range item.Edges {
+		t, _ := strconv.ParseFloat(edge.Traffic.Rates["http"], 64)
+		currentRequestRate += t
+	}
+
+	return currentRequestRate, nil
+}
+
 func (tc *Client) checkResources(ctx context.Context) error {
 	_, err := tc.getBaseDeployments(ctx)
 	return err

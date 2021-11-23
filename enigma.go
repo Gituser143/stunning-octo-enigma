@@ -31,6 +31,7 @@ func main() {
 	shouldLogReplicaCounts := flag.BoolP("logrc", "r", false, "Log replica counts of application deployments to file (use alongside l or s)")
 	shouldLogThroughput := flag.BoolP("logth", "t", false, "Log e2e throughput of application (use alongside l or s)")
 	shouldLogQueueLens := flag.BoolP("logq", "q", false, "Log queue lengths and create json with threshold queue lengths for each deployment of application (use alongside l)")
+	shouldLogReqRate := flag.BoolP("logreq", "p", false, "Log request rate from load tester (use alongside l or s)")
 	flag.Parse()
 
 	// Get config from config file
@@ -71,10 +72,10 @@ func main() {
 	log.Println("initialised trigger client")
 
 	if *loadtest {
-		loadTest(ctx, &tc, conf, *shouldLogQueueLens, *shouldLogReplicaCounts, *shouldLogThroughput)
+		loadTest(ctx, &tc, conf, *shouldLogQueueLens, *shouldLogReplicaCounts, *shouldLogThroughput, *shouldLogReqRate)
 	} else if *scaleAndLoad {
 		// Run load test
-		go loadTest(ctx, &tc, conf, *shouldLogQueueLens, *shouldLogReplicaCounts, *shouldLogThroughput)
+		go loadTest(ctx, &tc, conf, *shouldLogQueueLens, *shouldLogReplicaCounts, *shouldLogThroughput, *shouldLogReqRate)
 
 		// Run Trigger
 		err = tc.StartTrigger(ctx)
@@ -104,6 +105,34 @@ func printThrpughput(ctx context.Context, tc *trigger.Client) {
 				// log.Println("error getting e2e throughput:", err)
 			} else {
 				ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
+				if _, err := f.WriteString(ts); err != nil {
+					// // log.Println(err)
+				}
+			}
+		}
+	}
+}
+
+func printReqRate(ctx context.Context, tc *trigger.Client) {
+	f, err := os.OpenFile("request_rate.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		// // log.Println(err)
+	}
+
+	defer f.Close()
+
+	logTicker := time.NewTicker(3 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-logTicker.C:
+			req_rate, err := tc.GetRequestRate(ctx)
+			if err != nil {
+				// log.Println("error getting e2e throughput:", err)
+			} else {
+				ts := fmt.Sprintf("%g,%v\n", req_rate, time.Now())
 				if _, err := f.WriteString(ts); err != nil {
 					// // log.Println(err)
 				}
@@ -145,7 +174,8 @@ func loadTest(
 	conf config.Config,
 	shouldLogQueueLens bool,
 	shouldLogReplicaCounts bool,
-	shouldLogThroughput bool) {
+	shouldLogThroughput bool,
+	shouldLogReqRate bool) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Wait()
@@ -178,6 +208,10 @@ func loadTest(
 
 	if shouldLogThroughput {
 		go printThrpughput(ctx, tc)
+	}
+
+	if shouldLogReqRate {
+		go printReqRate(ctx, tc)
 	}
 
 	// Begin stress test
