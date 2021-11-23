@@ -1,6 +1,7 @@
 package load
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -51,6 +52,8 @@ func (sc *StressClient) StressApplication(conf config.LoadParameters) {
 		conf.MaxRate,
 	)
 	targets := sc.getTargets()
+
+	fmt.Println(conf, distribution)
 
 	for _, frequency := range distribution {
 		rate := vegeta.Rate{Freq: frequency, Per: time.Second}
