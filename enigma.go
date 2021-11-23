@@ -232,12 +232,12 @@ func logQueuelengths(
 ) {
 	maxQueueLengths := make(map[string]float64)
 
-	f, err := os.OpenFile("queue_lengths.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		// // log.Println(err)
-	}
+	// f, err := os.OpenFile("queue_lengths.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// if err != nil {
+	// 	// // log.Println(err)
+	// }
 
-	defer f.Close()
+	// defer f.Close()
 
 	// Dump Max Queue Lengths to a file
 	defer func() {
@@ -277,10 +277,10 @@ func logQueuelengths(
 							maxQueueLengths[dep] = q
 						}
 					}
-					qs := fmt.Sprintf("%s,%f,%v\n", dep, q, time.Now())
-					if _, err := f.WriteString(qs); err != nil {
-						// // log.Println(err)
-					}
+					// qs := fmt.Sprintf("%s,%f,%v\n", dep, q, time.Now())
+					// if _, err := f.WriteString(qs); err != nil {
+					// 	// // log.Println(err)
+					// }
 				}
 			}
 
