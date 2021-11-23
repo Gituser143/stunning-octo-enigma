@@ -59,7 +59,7 @@ func (sc *StressClient) StressApplication(conf config.LoadParameters) {
 		fmt.Println("Frequency: ", frequency)
 		rate := vegeta.Rate{Freq: frequency, Per: time.Second}
 		attackerFunc := vegeta.Workers(uint64(conf.Workers))
-		attacker := vegeta.NewAttacker(attackerFunc)
+		attacker := vegeta.NewAttacker(attackerFunc, vegeta.KeepAlive(false), vegeta.Connections(20000))
 		targeter := vegeta.NewStaticTargeter(targets...)
 		res := attacker.Attack(targeter, rate, time.Duration(conf.Duration)*time.Second, "")
 		open := true
