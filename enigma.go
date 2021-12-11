@@ -3,153 +3,79 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/Gituser143/stunning-octo-enigma/pkg/config"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/k8s"
-	client "github.com/Gituser143/stunning-octo-enigma/pkg/kiali-client"
+	"github.com/Gituser143/stunning-octo-enigma/pkg/kiali"
 	load "github.com/Gituser143/stunning-octo-enigma/pkg/load-generator"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/metricscraper"
 	"github.com/Gituser143/stunning-octo-enigma/pkg/trigger"
 
 	flag "github.com/spf13/pflag"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 func main() {
+
+	// Flag definitions
+	loadtest := flag.BoolP("load", "l", false, "Load test application")
+	filePath := flag.StringP("file", "f", "config.json", "Path to config file or directory")
+	scaleAndLoad := flag.BoolP("scale-and-load", "s", false, "Running scaler and simultaneously load test application")
+	shouldLogReplicaCounts := flag.BoolP("logrc", "r", false, "Log replica counts of application deployments to file (use alongside l or s)")
+	shouldLogThroughput := flag.BoolP("logth", "t", false, "Log e2e throughput of application (use alongside l or s)")
+	shouldLogQueueLens := flag.BoolP("logq", "q", false, "Log queue lengths and create json with threshold queue lengths for each deployment of application (use alongside l)")
+	shouldLogReqRate := flag.BoolP("logreq", "p", false, "Log request rate from load tester (use alongside l or s)")
+	flag.Parse()
+
+	// Get config from config file
+	conf, err := config.GetConfig(*filePath)
+	if err != nil {
+		if errors.Is(err, config.ErrInavlidConfigPath) {
+			flag.Usage()
+		}
+		log.Fatal(err)
+	}
+	log.Println("read config file")
+
 	// Init a context
 	ctx := context.Background()
 
-	// Variables for Kiali Client
-	host := "localhost"
-	port := 20001
-
 	// Init Kiali Client
-	kc := client.NewKialiClient(host, port, nil)
+	kc := kiali.NewKialiClient(conf.KialiHost.Host, conf.KialiHost.Port, nil)
 
 	// Init Metrics Client
 	mc, err := metricscraper.NewMetricClient()
 	if err != nil {
-		log.Fatal("failied to init metrics client")
+		log.Fatal("failed to init metrics client: ", err)
 	}
 
 	// Init K8s Client
 	k8sc, err := k8s.NewK8sClient()
 	if err != nil {
-		log.Fatal("failied to init k8s client")
+		log.Fatal("failed to init k8s client")
 	}
 
 	// Init Trigger Client
-	tc := trigger.TriggerClient{
+	tc := trigger.Client{
 		KialiClient:  kc,
 		MetricClient: mc,
 		K8sClient:    k8sc,
 	}
-
-	// Check if load test phase
-	loadtest := flag.BoolP("load", "l", false, "Load test or not")
-
-	// Get metrics config file path
-	filePath := flag.StringP("file", "f", "", "Path to config file or directory")
-
-	flag.Parse()
+	tc.SetThresholds(conf.Thresholds)
+	log.Println("initialised trigger client")
 
 	if *loadtest {
-		var wg sync.WaitGroup
-		wg.Add(1)
-		// TODO: Get load test parameters from configs
-		scheme := "http"
-		host := "localhost"
-		port := 30080
-
-		distributionType := "inc"
-		steps := 100
-		duration := 1
-		workers := 5
-		minRate := 10
-		maxRate := 100
-
-		namespaces := []string{"istio-teastore"}
-
-		// Init stress client
-		sc := load.NewStressClient(scheme, host, port, nil)
-		sc.SetTargetFunction(sc.GetTeaStoreTargets)
-
-		parameters := map[string]string{
-			"responseTime": "avg",
-			"throughput":   "response",
-			"duration":     "1m",
-		}
-
-		exitChan := make(chan int)
-
-		// Write queue lengths to file
-		go logQueuelengths(ctx, &tc, namespaces, parameters, exitChan, &wg)
-
-		// Begin stress test
-		sc.StressApplication(distributionType, steps, duration, workers, minRate, maxRate)
-
-		time.Sleep(30 * time.Second)
-		exitChan <- 1
-		wg.Wait()
-	} else {
-		if *filePath == "" {
-			flag.Usage()
-			os.Exit(1)
-		}
-
-		fileInfo, err := os.Stat(*filePath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Fetch thresholds
-		var thresholds trigger.Thresholds
-
-		// TODO: Handle multiple file configs cleanly
-		if fileInfo.IsDir() {
-			err = filepath.Walk(*filePath,
-				func(path string, info fs.FileInfo, err error) error {
-					if err != nil {
-						return err
-					}
-					if !info.IsDir() {
-						bs, err := ioutil.ReadFile(path)
-						if err != nil {
-							fmt.Println("2")
-							return err
-						}
-						err = json.Unmarshal(bs, &thresholds)
-						if err != nil {
-							return err
-						}
-					}
-					return nil
-				})
-			if err != nil {
-				log.Fatal(err)
-			}
-		} else {
-			bs, err := ioutil.ReadFile(*filePath)
-			if err != nil {
-				log.Fatal(err)
-			}
-			err = json.Unmarshal(bs, &thresholds)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-
-		log.Println("read config file")
-
-		tc.SetThresholds(thresholds)
-
-		log.Println("initialised trigger client")
+		loadTest(ctx, &tc, conf, *shouldLogQueueLens, *shouldLogReplicaCounts, *shouldLogThroughput, *shouldLogReqRate)
+	} else if *scaleAndLoad {
+		// Run load test
+		go loadTest(ctx, &tc, conf, *shouldLogQueueLens, *shouldLogReplicaCounts, *shouldLogThroughput, *shouldLogReqRate)
 
 		// Run Trigger
 		err = tc.StartTrigger(ctx)
@@ -159,9 +85,146 @@ func main() {
 	}
 }
 
+func printThrpughput(ctx context.Context, tc *trigger.Client) {
+	f, err := os.OpenFile("throughput_load.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		// // log.Println(err)
+	}
+
+	defer f.Close()
+
+	logTicker := time.NewTicker(3 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-logTicker.C:
+			throughput, err := tc.GetE2EThroughput(ctx)
+			if err != nil {
+				// log.Println("error getting e2e throughput:", err)
+			} else {
+				ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
+				if _, err := f.WriteString(ts); err != nil {
+					// // log.Println(err)
+				}
+			}
+		}
+	}
+}
+
+func printReqRate(ctx context.Context, tc *trigger.Client) {
+	f, err := os.OpenFile("request_rate.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		// // log.Println(err)
+	}
+
+	defer f.Close()
+
+	logTicker := time.NewTicker(3 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-logTicker.C:
+			req_rate, err := tc.GetRequestRate(ctx)
+			if err != nil {
+				// log.Println("error getting e2e throughput:", err)
+			} else {
+				ts := fmt.Sprintf("%g,%v\n", req_rate, time.Now())
+				if _, err := f.WriteString(ts); err != nil {
+					// // log.Println(err)
+				}
+			}
+		}
+	}
+}
+
+func printReplicaCount(ctx context.Context, tc *trigger.Client, namespace string) {
+	f, err := os.OpenFile("replica_counts.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		// log.Println(err)
+	}
+
+	defer f.Close()
+
+	deployments, _ := tc.K8sClient.GetDeploymentNames(ctx, namespace)
+	logTicker := time.NewTicker(5 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-logTicker.C:
+			for _, dep := range deployments {
+				replicaCount, _ := tc.K8sClient.GetCurrentReplicaCount(ctx, namespace, dep)
+				ts := fmt.Sprintf("%s,%d,%v\n", dep, replicaCount, time.Now())
+				if _, err := f.WriteString(ts); err != nil {
+					// log.Println(err)
+				}
+			}
+		}
+	}
+}
+
+func loadTest(
+	ctx context.Context,
+	tc *trigger.Client,
+	conf config.Config,
+	shouldLogQueueLens bool,
+	shouldLogReplicaCounts bool,
+	shouldLogThroughput bool,
+	shouldLogReqRate bool) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Wait()
+
+	if conf.AppHost.Scheme == "" {
+		conf.AppHost.Scheme = "http"
+	}
+
+	// Init stress client
+	sc := load.NewStressClient(conf.AppHost.Scheme, conf.AppHost.Host, conf.AppHost.Port, nil)
+	sc.SetTargetFunction(sc.GetTeaStoreTargets)
+
+	parameters := map[string]string{
+		"responseTime": "avg",
+		"throughput":   "response",
+		"duration":     "1m",
+	}
+
+	exitChan := make(chan int)
+
+	if shouldLogQueueLens {
+		// Write queue lengths to file
+		go logQueuelengths(ctx, tc, conf.Namespaces, parameters, exitChan, &wg)
+	}
+
+	if shouldLogReplicaCounts {
+		// Print replica counts every 5 seconds to file
+		go printReplicaCount(ctx, tc, conf.Namespaces[0])
+	}
+
+	if shouldLogThroughput {
+		go printThrpughput(ctx, tc)
+	}
+
+	if shouldLogReqRate {
+		go printReqRate(ctx, tc)
+	}
+
+	// Begin stress test
+	sc.StressApplication(conf.LoadConfig)
+
+	log.Println("Finished load testing on application")
+	time.Sleep(10 * time.Second)
+	exitChan <- 1
+}
+
 func logQueuelengths(
 	ctx context.Context,
-	tc *trigger.TriggerClient,
+	tc *trigger.Client,
 	namespaces []string,
 	parameters map[string]string,
 	exitChan chan int,
@@ -169,7 +232,14 @@ func logQueuelengths(
 ) {
 	maxQueueLengths := make(map[string]float64)
 
-	// Dump Queue Lengths to a file
+	// f, err := os.OpenFile("queue_lengths.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// if err != nil {
+	// 	// // log.Println(err)
+	// }
+
+	// defer f.Close()
+
+	// Dump Max Queue Lengths to a file
 	defer func() {
 		defer wg.Done()
 		bs, err := json.MarshalIndent(maxQueueLengths, "", "\t")
@@ -187,12 +257,13 @@ func logQueuelengths(
 	t := time.NewTicker(3 * time.Second)
 
 	for {
+		egCtx, cancel := context.WithCancel(ctx)
 		select {
 		case <-t.C:
 			// Get workload graph for a namespace
-			graph, err := tc.GetWorkloadGraph(ctx, namespaces, parameters)
+			graph, err := tc.KialiClient.GetWorkloadGraph(egCtx, namespaces, parameters)
 			if err != nil {
-				log.Println(err)
+				// // log.Println(err)
 			} else {
 				// Extract queue lengths from graph
 				queueLengths, _ := graph.GetQueueLengths()
@@ -202,21 +273,25 @@ func logQueuelengths(
 					if maxQ, ok := maxQueueLengths[dep]; !ok {
 						maxQueueLengths[dep] = q
 					} else {
-						if maxQ > q {
+						if q > maxQ {
 							maxQueueLengths[dep] = q
 						}
 					}
+					// qs := fmt.Sprintf("%s,%f,%v\n", dep, q, time.Now())
+					// if _, err := f.WriteString(qs); err != nil {
+					// 	// // log.Println(err)
+					// }
 				}
 			}
 
 		case <-exitChan:
+			cancel()
 			return
 
-		case <-ctx.Done():
-			return
+			// case err := <-egCtx.Done():
+			// log.Println("Context cancelled", err)
 		}
 	}
-
 }
 
 /*

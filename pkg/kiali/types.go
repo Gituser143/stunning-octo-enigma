@@ -1,4 +1,4 @@
-package client
+package kiali
 
 import (
 	"fmt"
@@ -7,8 +7,8 @@ import (
 	graph "github.com/kiali/kiali/graph/config/cytoscape"
 )
 
-// KialiClient is a type to help interact with kiali dashboards
-type KialiClient struct {
+// Client is a type to help interact with kiali dashboards
+type Client struct {
 	httpClient *http.Client
 	host       string
 }
@@ -23,8 +23,8 @@ type Item struct {
 }
 
 // NewKialiClient is a constructor for type KialiClient
-func NewKialiClient(host string, port int, hc *http.Client) *KialiClient {
-	kc := KialiClient{
+func NewKialiClient(host string, port int, hc *http.Client) *Client {
+	kc := Client{
 		host: fmt.Sprintf("%s:%d", host, port),
 	}
 

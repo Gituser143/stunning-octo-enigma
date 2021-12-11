@@ -19,12 +19,39 @@ import (
 )
 
 // StartTrigger runs the trigger indefinetely and checks for violations every 30 seconds
-func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
-	eg, egCtx := errgroup.WithContext(ctx)
-	t := time.NewTicker(30 * time.Second)
+func (tc *Client) StartTrigger(ctx context.Context) error {
+	t := time.NewTicker(15 * time.Second)
 	thresholds := tc.thresholds
 
+	// go func() {
+	// 	logTicker := time.NewTicker(3 * time.Second)
+	// 	f, err := os.OpenFile("throughput.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// 	if err != nil {
+	// 		// log.Println(err)
+	// 	}
+
+	// 	defer f.Close()
+	// 	for {
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			return
+
+	// 		case <-logTicker.C:
+	// 			throughput, err := tc.GetE2EThroughput(ctx)
+	// 			if err != nil {
+	// 				// log.Println("error getting e2e throughput:", err)
+	// 			} else {
+	// 				ts := fmt.Sprintf("%d,%v\n", throughput, time.Now())
+	// 				if _, err := f.WriteString(ts); err != nil {
+	// 					// log.Println(err)
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }()
+
 	for {
+		eg, egCtx := errgroup.WithContext(ctx)
 
 		select {
 		case <-ctx.Done():
@@ -52,28 +79,34 @@ func (tc *TriggerClient) StartTrigger(ctx context.Context) error {
 					// 	at which trigger occured
 					// 	Scale function should then calculate effect of scaling to
 					// 	donwstream services
-					baseDeps, err := tc.getBaseDeployments(ctx)
-					if err != nil && !errors.Is(err, errScaleApplication) {
+
+					depCtx, cancel := context.WithCancel(ctx)
+					defer cancel()
+
+					baseDeps, err := tc.getBaseDeployments(depCtx)
+					if err != nil && errors.Is(err, errScaleApplication) {
 						log.Println("Deployments to scale are:", baseDeps)
-						tc.scaleDeployements(ctx, baseDeps)
+						tc.scaleDeployements(depCtx, baseDeps)
 					}
+				} else if errors.Is(err, context.Canceled) {
+					// log.Println(err)
 				} else {
 					log.Println("no resource thresholds crossed, not scaling")
-					return err
+					// return err
 				}
 			}
 		}
 	}
 }
 
-func (tc *TriggerClient) getQueueLengthThresholds(fileName string) map[string]float64 {
+func (tc *Client) getQueueLengthThresholds(fileName string) map[string]float64 {
 
 	queueLengthThresholds := make(map[string]float64)
 
 	jsonFile, err := os.Open(fileName)
 
 	if err != nil {
-		log.Println(err)
+		// log.Println(err)
 	}
 
 	defer jsonFile.Close()
@@ -84,7 +117,7 @@ func (tc *TriggerClient) getQueueLengthThresholds(fileName string) map[string]fl
 	return queueLengthThresholds
 }
 
-func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[string]Resources) error {
+func (tc *Client) scaleDeployements(ctx context.Context, baseDeps map[string]Resources) error {
 
 	// Initialize an empty list used as a queue for BFS
 	graphQueue := list.New()
@@ -97,10 +130,10 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 	parameters := map[string]string{
 		"responseTime": "avg",
 		"throughput":   "response",
-		"duration":     "1m",
+		"duration":     "5m",
 	}
 
-	kialiGraph, err := tc.GetWorkloadGraph(ctx, namespaces, parameters)
+	kialiGraph, err := tc.KialiClient.GetWorkloadGraph(ctx, namespaces, parameters)
 	if err != nil {
 		return err
 	}
@@ -108,23 +141,22 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 	queueLengths, _ := kialiGraph.GetQueueLengths()
 
 	// Initializes the replica count to the current replica count for each service
-	for service, item := range kialiGraph {
+	for _, item := range kialiGraph {
 		if item.Node.Workload == "unknown" {
 			continue
 		} else {
-			currentReplicaCount, err := tc.K8sClient.GetCurrentReplicaCount(ctx, applicationNamespace, service)
+			currentReplicaCount, err := tc.K8sClient.GetCurrentReplicaCount(ctx, applicationNamespace, item.Node.Workload)
 
 			if err != nil {
 				return err
 			}
 
-			replicaCounts[service] = (int)(currentReplicaCount)
-			oldReplicaCounts[service] = (int)(currentReplicaCount)
+			replicaCounts[item.Node.Workload] = (int)(currentReplicaCount)
+			oldReplicaCounts[item.Node.Workload] = (int)(currentReplicaCount)
 		}
 	}
 
 	baseDependenciesNewReplicaCount, err := tc.getNewReplicaCounts(ctx, baseDeps, applicationNamespace)
-
 	if err != nil {
 		return err
 	}
@@ -134,11 +166,22 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 	// Pushes the base dependencies into the graphQueue
 	// to perform BFS on it's child nodes
 	for service, replicaCount := range baseDependenciesNewReplicaCount {
+		log.Printf(
+			"[hpa rc for %s] old replica count: %d, new replica count: %d\n",
+			service,
+			replicaCounts[service],
+			replicaCount,
+		)
 		replicaCounts[service] = (int)(math.Max(float64(replicaCounts[service]), float64(replicaCount)))
 		graphQueue.PushBack(service)
 	}
 
 	queueLengthThresholds := tc.getQueueLengthThresholds("queue.json")
+
+	idMap := make(map[string]string)
+	for id, item := range kialiGraph {
+		idMap[item.Node.Workload] = id
+	}
 
 	for {
 		if graphQueue.Len() == 0 {
@@ -147,15 +190,41 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 
 		currentNode := graphQueue.Front()
 		// curentService here refers to the parent service
-		currentService := fmt.Sprintf("%v", currentNode.Value)
+		currentService := idMap[fmt.Sprintf("%v", currentNode.Value)]
+		currentServiceName := fmt.Sprintf("%v", currentNode.Value)
+		log.Printf("calculating effect for service %s\n", currentNode.Value)
 		graphQueue.Remove(currentNode)
 
-		for _, edge := range kialiGraph[currentService].Edges {
-			// serviceToScale refers to the child service
-			serviceToScale := edge.Target
-			newQueueLength := queueLengths[currentService] * float64(replicaCounts[currentService]) / float64(oldReplicaCounts[currentService])
-			newReplicaCount := (int)(math.Ceil(newQueueLength / queueLengthThresholds[serviceToScale]))
+		if _, ok := kialiGraph[currentService]; !ok {
+			continue
+		}
 
+		for _, edge := range kialiGraph[currentService].Edges {
+			if edge == nil {
+				continue
+			}
+			// serviceToScale refers to the child service
+			serviceToScale := kialiGraph[edge.Target].Node.Workload
+			newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentServiceName]) / float64(oldReplicaCounts[currentServiceName])
+
+			// // current formula :
+			// // 	newQ = oldQueue * parent_rc / service_rc
+			// //  N = parent_rc/service_rc
+			// // newQueueLength := queueLengths[serviceToScale] * float64(replicaCounts[currentServiceName]) / float64(oldReplicaCounts[currentServiceName])
+
+			// // New formula :
+			// // 	newQ = oldQueue * ( (parent_rc/service_rc) / ( (parent_rc/service_rc) + (parent_rc/service_rc)^2 + 1 ) )
+			// N := float64(replicaCounts[currentServiceName]) / float64(oldReplicaCounts[currentServiceName])
+			// newQueueLength := queueLengths[serviceToScale] * (N / (N + N*N + 1))
+
+			newReplicaCount := (int)(math.Ceil(newQueueLength/queueLengthThresholds[serviceToScale])) * replicaCounts[serviceToScale]
+
+			log.Printf(
+				"[service: %s] old ql: %f, new ql: %f\n",
+				serviceToScale,
+				queueLengths[serviceToScale],
+				newQueueLength,
+			)
 			if newReplicaCount > replicaCounts[serviceToScale] {
 				replicaCounts[serviceToScale] = newReplicaCount
 				graphQueue.PushBack(serviceToScale)
@@ -165,6 +234,12 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 
 	for service, replicaCount := range replicaCounts {
 		if replicaCount > oldReplicaCounts[service] {
+			log.Printf(
+				"[replicas for: %s] old replica count: %d, new replica count: %d\n",
+				service,
+				oldReplicaCounts[service],
+				replicaCount,
+			)
 			tc.K8sClient.ScaleDeployment(ctx, applicationNamespace, service, int32(replicaCount))
 		}
 	}
@@ -172,19 +247,33 @@ func (tc *TriggerClient) scaleDeployements(ctx context.Context, baseDeps map[str
 	return nil
 }
 
-func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) error {
-	// Get Namspace graph for a namespace
+func (tc *Client) checkThroughput(ctx context.Context, throughput int64) error {
+	currentThroughput, err := tc.GetE2EThroughput(ctx)
+	log.Println("E2E Throughput: ", currentThroughput)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	if currentThroughput < throughput {
+		return errScaleApplication
+	}
+
+	return nil
+}
+
+func (tc *Client) GetE2EThroughput(ctx context.Context) (int64, error) {
 	namespaces := []string{applicationNamespace}
 	parameters := map[string]string{
 		"responseTime": "avg",
 		"throughput":   "response",
-		"duration":     "1m",
+		"duration":     "5m",
 	}
 
 	// Get workload graph for a namespace
-	graph, err := tc.GetWorkloadGraph(ctx, namespaces, parameters)
+	graph, err := tc.KialiClient.GetWorkloadGraph(ctx, namespaces, parameters)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	// Get Unkown ID
@@ -197,7 +286,7 @@ func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) 
 	}
 
 	if unknownID == "" {
-		return errors.New("no unkown service")
+		return -1, errors.New("no unkown service")
 	}
 
 	item := graph[unknownID]
@@ -209,29 +298,64 @@ func (tc *TriggerClient) checkThroughput(ctx context.Context, throughput int64) 
 		currentThroughput += t
 	}
 
-	if currentThroughput < throughput {
-		return errScaleApplication
-	}
-
-	return nil
+	return currentThroughput, nil
 }
 
-func (tc *TriggerClient) checkResources(ctx context.Context) error {
+func (tc *Client) GetRequestRate(ctx context.Context) (float64, error) {
+	namespaces := []string{applicationNamespace}
+	parameters := map[string]string{
+		"responseTime": "avg",
+		"throughput":   "response",
+		"duration":     "5m",
+	}
+
+	// Get workload graph for a namespace
+	graph, err := tc.KialiClient.GetWorkloadGraph(ctx, namespaces, parameters)
+	if err != nil {
+		return -1, err
+	}
+
+	// Get Unkown ID
+	unknownID := ""
+	for service, item := range graph {
+		if item.Node.Workload == "unknown" {
+			unknownID = service
+			break
+		}
+	}
+
+	if unknownID == "" {
+		return -1, errors.New("no unkown service")
+	}
+
+	item := graph[unknownID]
+	currentRequestRate := float64(0)
+
+	// Calculate e2e throughput as sum of throughput at unknowns
+	for _, edge := range item.Edges {
+		t, _ := strconv.ParseFloat(edge.Traffic.Rates["http"], 64)
+		currentRequestRate += t
+	}
+
+	return currentRequestRate, nil
+}
+
+func (tc *Client) checkResources(ctx context.Context) error {
 	_, err := tc.getBaseDeployments(ctx)
 	return err
 }
 
 // getBaseDeployments returns a slice of deployment names that have resource
 // utilization higher than specified threshold along with their respoective metrics
-func (tc *TriggerClient) getBaseDeployments(ctx context.Context) (map[string]Resources, error) {
+func (tc *Client) getBaseDeployments(ctx context.Context) (map[string]Resources, error) {
 	baseDeps := make(map[string]Resources)
 
-	pods, err := tc.GetPodNames(ctx, applicationNamespace)
+	pods, err := tc.K8sClient.GetPodNames(ctx, applicationNamespace)
 	if err != nil {
 		return baseDeps, err
 	}
 
-	deps, err := tc.GetDeploymentNames(ctx, applicationNamespace)
+	deps, err := tc.K8sClient.GetDeploymentNames(ctx, applicationNamespace)
 	if err != nil {
 		return baseDeps, err
 	}
@@ -274,15 +398,15 @@ func (tc *TriggerClient) getBaseDeployments(ctx context.Context) (map[string]Res
 	return baseDeps, nil
 }
 
-func (tc *TriggerClient) getPerDeploymentMetrics(ctx context.Context, depPodMap map[string][]string) map[string]Resources {
+func (tc *Client) getPerDeploymentMetrics(ctx context.Context, depPodMap map[string][]string) map[string]Resources {
 	resourceMap := make(map[string]Resources)
 	for dep, pods := range depPodMap {
 		for _, pod := range pods {
-			metrics, err := tc.GetPodMetrics(ctx, applicationNamespace, pod)
+			metrics, err := tc.MetricClient.GetPodMetrics(ctx, applicationNamespace, pod)
 			if err != nil {
 				// print out error and not return to try and get as many pod metrics
 				// as possible.
-				log.Printf("error %s getting metrics of pod %s", err.Error(), pod)
+				// log.Printf("error %s getting metrics of pod %s", err.Error(), pod)
 			}
 			resourceMap[dep] = aggregatePodMetricsToResources(metrics)
 		}
@@ -307,6 +431,9 @@ func getPodsForDeployment(deploymentName string, pods []string) []string {
 func aggregatePodMetricsToResources(metrics *v1beta1.PodMetrics) Resources {
 	r := Resources{}
 	numContainers := len(metrics.Containers)
+	if numContainers == 0 {
+		return r
+	}
 
 	var cpuSum, memSum float64
 	for _, c := range metrics.Containers {
@@ -323,7 +450,7 @@ func aggregatePodMetricsToResources(metrics *v1beta1.PodMetrics) Resources {
 // getNewReplicaCounts gets replica counts for problematic deployments,
 // i. e., deployments where resource thresholds are exceeded.
 // This function returns a map of deployments to their new (HPA) replica counts
-func (tc *TriggerClient) getNewReplicaCounts(ctx context.Context, baseDeps map[string]Resources, namespace string) (map[string]int64, error) {
+func (tc *Client) getNewReplicaCounts(ctx context.Context, baseDeps map[string]Resources, namespace string) (map[string]int64, error) {
 
 	// desiredReplicas := ceil[currentReplicas * ( currentMetricValue / desiredMetricValue )]
 
@@ -337,8 +464,8 @@ func (tc *TriggerClient) getNewReplicaCounts(ctx context.Context, baseDeps map[s
 
 		desiredMetrics := tc.thresholds.ResourceThresholds[dep]
 
-		desiredReplicasCPU := int64(math.Ceil(float64((currentReplicas * (int32(currentMetrics.CPU) / int32(desiredMetrics.CPU))))))
-		desiredReplicasMemory := int64(math.Ceil(float64(currentReplicas * (int32(currentMetrics.Memory) / int32(currentMetrics.Memory)))))
+		desiredReplicasCPU := int64(math.Ceil(float64(currentReplicas) * currentMetrics.CPU / desiredMetrics.CPU))
+		desiredReplicasMemory := int64(math.Ceil(float64(currentReplicas) * currentMetrics.Memory / currentMetrics.Memory))
 
 		desiredReplicas := int64(0)
 

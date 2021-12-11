@@ -1,10 +1,11 @@
 package load
 
 import (
-	"log"
+	"fmt"
 	"math/rand"
 	"time"
 
+	"github.com/Gituser143/stunning-octo-enigma/pkg/config"
 	vegeta "github.com/tsenart/vegeta/lib"
 )
 
@@ -43,33 +44,34 @@ func (sc *StressClient) getDistribution(distributionType string, steps int, minR
 // StressApplication stress tests the application using a given number of
 // workers, for a specified duration, with minimum and maximum rate of requests
 // sent for iterations specified by steps.
-func (sc *StressClient) StressApplication(
-	distributionType string,
-	steps int,
-	duration int,
-	workers int,
-	minRate int,
-	maxRate int,
-) {
-	distribution := sc.getDistribution(distributionType, steps, minRate, maxRate)
+func (sc *StressClient) StressApplication(conf config.LoadParameters) {
+	distribution := sc.getDistribution(
+		conf.DistributionType,
+		conf.Steps,
+		conf.MinRate,
+		conf.MaxRate,
+	)
 	targets := sc.getTargets()
 
+	fmt.Println(conf, distribution)
+
 	for _, frequency := range distribution {
+		fmt.Println("Frequency: ", frequency)
 		rate := vegeta.Rate{Freq: frequency, Per: time.Second}
-		attackerFunc := vegeta.Workers(uint64(workers))
-		attacker := vegeta.NewAttacker(attackerFunc)
+		attackerFunc := vegeta.Workers(uint64(conf.Workers))
+		attacker := vegeta.NewAttacker(attackerFunc, vegeta.KeepAlive(false), vegeta.Connections(20000))
 		targeter := vegeta.NewStaticTargeter(targets...)
-		res := attacker.Attack(targeter, rate, time.Duration(duration)*time.Second, "")
+		res := attacker.Attack(targeter, rate, time.Duration(conf.Duration)*time.Second, "")
 		open := true
-		var result *vegeta.Result
+		// var result *vegeta.Result
 
 		for open {
-			result, open = <-res
-			if result != nil {
-				log.Println("response received", result.Code)
-			} else {
-				log.Println("nil result")
-			}
+			_, open = <-res
+			// if result != nil {
+			// 	log.Println("response received", result.Code)
+			// } else {
+			// 	log.Println("nil result")
+			// }
 		}
 	}
 }

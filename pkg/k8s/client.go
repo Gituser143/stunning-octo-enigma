@@ -11,15 +11,18 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+
+	// Import Auth for provider specific auth
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
-// K8sClient is a wrapper around a clientset.
-type K8sClient struct {
+// Client is a wrapper around a clientset.
+type Client struct {
 	client *kubernetes.Clientset
 }
 
 // NewK8sClient inits a new clientset from a local kubeconfig and slaps a K8sClient around it.
-func NewK8sClient() (*K8sClient, error) {
+func NewK8sClient() (*Client, error) {
 	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -34,11 +37,11 @@ func NewK8sClient() (*K8sClient, error) {
 		return nil, err
 	}
 
-	return &K8sClient{client}, nil
+	return &Client{client}, nil
 }
 
 // GetDeploymentNames gets only names of all deployments.
-func (c *K8sClient) GetDeploymentNames(ctx context.Context, namespace string) ([]string, error) {
+func (c *Client) GetDeploymentNames(ctx context.Context, namespace string) ([]string, error) {
 	deployments, err := c.GetDeployments(ctx, namespace)
 	if err != nil {
 		return nil, err
@@ -53,7 +56,7 @@ func (c *K8sClient) GetDeploymentNames(ctx context.Context, namespace string) ([
 }
 
 // GetDeployments lists out all deployments and returns a slice of it.
-func (c *K8sClient) GetDeployments(ctx context.Context, namespace string) ([]appsv1.Deployment, error) {
+func (c *Client) GetDeployments(ctx context.Context, namespace string) ([]appsv1.Deployment, error) {
 	depList, err := c.client.AppsV1().
 		Deployments(namespace).
 		List(ctx, metav1.ListOptions{})
@@ -65,7 +68,7 @@ func (c *K8sClient) GetDeployments(ctx context.Context, namespace string) ([]app
 }
 
 // GetPodNames blah blah.
-func (c *K8sClient) GetPodNames(ctx context.Context, namespace string) ([]string, error) {
+func (c *Client) GetPodNames(ctx context.Context, namespace string) ([]string, error) {
 	pods, err := c.GetPods(ctx, namespace)
 	if err != nil {
 		return nil, err
@@ -80,7 +83,7 @@ func (c *K8sClient) GetPodNames(ctx context.Context, namespace string) ([]string
 }
 
 // GetPods gets blah blah.
-func (c *K8sClient) GetPods(ctx context.Context, namespace string) ([]apiv1.Pod, error) {
+func (c *Client) GetPods(ctx context.Context, namespace string) ([]apiv1.Pod, error) {
 	podList, err := c.client.CoreV1().
 		Pods(namespace).
 		List(ctx, metav1.ListOptions{})
@@ -92,7 +95,7 @@ func (c *K8sClient) GetPods(ctx context.Context, namespace string) ([]apiv1.Pod,
 }
 
 // GetServiceNames blah blah.
-func (c *K8sClient) GetServiceNames(ctx context.Context, namespace string) ([]string, error) {
+func (c *Client) GetServiceNames(ctx context.Context, namespace string) ([]string, error) {
 	svcs, err := c.GetServices(ctx, namespace)
 	if err != nil {
 		return nil, err
@@ -107,7 +110,7 @@ func (c *K8sClient) GetServiceNames(ctx context.Context, namespace string) ([]st
 }
 
 // GetServices gets blah blah.
-func (c *K8sClient) GetServices(ctx context.Context, namespace string) ([]apiv1.Service, error) {
+func (c *Client) GetServices(ctx context.Context, namespace string) ([]apiv1.Service, error) {
 	svcs, err := c.client.CoreV1().
 		Services(namespace).
 		List(ctx, metav1.ListOptions{})
@@ -119,7 +122,7 @@ func (c *K8sClient) GetServices(ctx context.Context, namespace string) ([]apiv1.
 }
 
 // ScaleDeployment pulls one scale scene on a deployment.
-func (c *K8sClient) ScaleDeployment(ctx context.Context, namespace, name string, replicas int32) error {
+func (c *Client) ScaleDeployment(ctx context.Context, namespace, name string, replicas int32) error {
 	s, err := c.client.AppsV1().
 		Deployments(namespace).
 		GetScale(ctx, name, metav1.GetOptions{})
@@ -140,17 +143,15 @@ func (c *K8sClient) ScaleDeployment(ctx context.Context, namespace, name string,
 	return nil
 }
 
-// Gets current Replica Count of given deployment in a namespace
-func (c *K8sClient) GetCurrentReplicaCount(ctx context.Context, namespace, name string) (int32, error) {
+// GetCurrentReplicaCount fetches current Replica Count of given deployment in
+// a namespace
+func (c *Client) GetCurrentReplicaCount(ctx context.Context, namespace, name string) (int32, error) {
 	s, err := c.client.AppsV1().
 		Deployments(namespace).
-		GetScale(ctx, name, metav1.GetOptions{})
+		Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return 0, err
 	}
 
-	sc := s.DeepCopy()
-	replicaCount := sc.Spec.Replicas
-
-	return replicaCount, err
+	return s.Status.Replicas, err
 }
