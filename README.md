@@ -26,8 +26,19 @@ The packages of the repository are organized as follows
 
 How to run
 ----------
+The following commands are for Linux based operating systems.
+1. Make sure that `kubectl` is installed.
+	1. Download the latest release:
+		```bash
+		curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+		```
 
-1.	Make sure that `istio` and `kiali` are set up by following the setup manual:
+	2. Install `kubectl`
+		```bash
+		sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+		```
+
+2.	Make sure that `istio` and `kiali` are set up by following the setup manual:
 
 	1.	Download Istio Binary
 
@@ -56,19 +67,19 @@ How to run
 		kubectl rollout status deployment/kiali -n istio-system
 		```
 
-2.	Additionally, metric server should be deployed using the command (make sure to be in the project root before running commands):
+3.	Additionally, metric server should be deployed using the command (make sure to be in the project root before running commands):
 
 	```bash
 	kubectl apply -f deploy/metric-server.yaml
 	```
 
-3.	Deploy the application onto the cluster using the command (below command deploys tea store):
+4.	Deploy the application onto the cluster using the command (below command deploys tea store):
 
 	```bash
 	kubectl apply -f deploy/teastore-clusterip.yaml
 	```
 
-4.	Update the host in the configuration file with the endpoint to be hit while generating load. The configuration file also must contain details such as load parameters and CPU/Memory thresholds that should be met for the services that need to be autoscaled in the application. The structure of a config file is as follows:
+5.	Update the host in the configuration file with the endpoint to be hit while generating load. The configuration file also must contain details such as load parameters and CPU/Memory thresholds that should be met for the services that need to be autoscaled in the application. The structure of a config file is as follows:
 
 	```json
 	{
@@ -109,13 +120,13 @@ How to run
 	}
 	```
 
-5.	Building the binary (requires `go` to be installed).
+6.	Building the binary (requires `go` to be installed).
 
 	```bash
 	go build enigma.go
 	```
 
-6.	The binary can then be run using the usage defined in the next section. Example:
+7.	The binary can then be run using the usage defined in the next section. Example:
 
 	-	Run load on application:
 
